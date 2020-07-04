@@ -1,4 +1,4 @@
-package jp.jaxa.iss.kibo.rpc.defaultapk;
+package jp.jaxa.iss.kibo.rpc.indonesia;
 
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;

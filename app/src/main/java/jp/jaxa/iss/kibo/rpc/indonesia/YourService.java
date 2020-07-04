@@ -1,4 +1,4 @@
-package jp.jaxa.iss.kibo.rpc.defaultapk;
+package jp.jaxa.iss.kibo.rpc.indonesia;
 
 import jp.jaxa.iss.kibo.rpc.api.KiboRpcService;
 
