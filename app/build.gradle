@@ -50,4 +50,5 @@ dependencies {
     }
     testCompile 'junit:junit:4.12'
     compile 'com.quickbirdstudios:opencv:3.4.4-contrib'
+    compile 'me.dm7.barcodescanner:zxing:1.9'
 }
