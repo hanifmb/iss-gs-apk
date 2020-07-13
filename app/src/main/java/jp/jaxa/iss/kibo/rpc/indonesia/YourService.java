@@ -30,8 +30,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 
-
-
 /**
  * Class meant to handle commands from the Ground Data System and execute them in Astrobee
  */
@@ -125,43 +123,14 @@ public class YourService extends KiboRpcService {
         //moveToWrapper(11, -5.30, 4.33, 0.500, 0.500, -0.500, 0.500);
         //moveToWrapper(11, -5.60, 4.33, 0.500, 0.500, -0.500, 0.500);
 
-        moveToWrapper(10.7, -5.16, 4.42, 0,0 , 1, 0);
-        long start, end;
+        moveToWrapper(10.7, -5.16, 4.42, 0, 0 ,1, 0);
 
-        for (int i = 0; i<2; i++){
+        decodeQRWithCam(0, Camera.NAVCAM, Image.DISTORT, 960, 720, "960x720_DISTORT");
 
-            start = System.currentTimeMillis();
-            decodeQRWithCam(0, Camera.NAVCAM, Image.DISTORT, 640, 480, "640x480_DISTORT");
-            end = System.currentTimeMillis();
-            Log.i("SPACECAT", "640x480_DISTORT" + String.valueOf(start-end));
-
-            start = System.currentTimeMillis();
-            decodeQRWithCam(0, Camera.NAVCAM, Image.UNDISTORT, 640, 480, "640x480_UNDISTORT");
-            end = System.currentTimeMillis();
-            Log.i("SPACECAT", "640x480_UNDISTORT" + String.valueOf(start-end));
-
-            start = System.currentTimeMillis();
-            decodeQRWithCam(0, Camera.NAVCAM, Image.DISTORT, 960, 720, "960x720_DISTORT");
-            end = System.currentTimeMillis();
-            Log.i("SPACECAT", "960x720_DISTORT" + String.valueOf(start-end));
-
-            start = System.currentTimeMillis();
-            decodeQRWithCam(0, Camera.NAVCAM, Image.UNDISTORT, 960, 720, "960x720_UNDISTORT");
-            end = System.currentTimeMillis();
-            Log.i("SPACECAT", "960x720_UNDISTORT" + String.valueOf(start-end));
-
-            start = System.currentTimeMillis();
-            decodeQRWithCam(0, Camera.NAVCAM, Image.DISTORT, 1280, 960, "1280x960_DISTORT");
-            end = System.currentTimeMillis();
-            Log.i("SPACECAT", "1280x960_DISTORT" + String.valueOf(start-end));
-
-            start = System.currentTimeMillis();
-            decodeQRWithCam(0, Camera.NAVCAM, Image.UNDISTORT, 1280, 960, "1280x960_UNDISTORT");
-            end = System.currentTimeMillis();
-            Log.i("SPACECAT", "1280x960_UNDISTORT" + String.valueOf(start-end));
-
-        }
-
+        moveToWrapper(10.7, -5.95, 4.42, 0, 0 ,1, 0);
+        moveToWrapper(10.455, -6.54, 4.42, 0, 0 ,1, 0);
+        moveToWrapper(11.06, -7.68, 5.4, 0, 0 ,1, 0);
+        
         //api.judgeSendFinishISS();
         api.judgeSendFinishSimulation();
     }
@@ -206,7 +175,7 @@ public class YourService extends KiboRpcService {
 
         Mat inputImage;
 
-        int MAX_RETRY_TIMES = 1;
+        int MAX_RETRY_TIMES = 10;
         int retryTimes = 1;
 
         String qrString = null;
@@ -222,6 +191,10 @@ public class YourService extends KiboRpcService {
             }
 
             boolean success = decodeQR(targetQR, inputImage, resizeWidth, resizeHeight, image, identifier);
+
+            if(success){
+                return true; 
+            }
 
             retryTimes++;
 
@@ -290,9 +263,9 @@ public class YourService extends KiboRpcService {
 
         if (qrString != null) {
 
-            Log.i("SPACECAT", identifier+ qrString);
+            Log.i("SPACECAT", identifier + qrString);
+            api.judgeSendDiscoveredQR(0, qrString);
 
-            //api.judgeSendDiscoveredQR(0, qrString);
             return true;
 
         }
@@ -347,7 +320,6 @@ public class YourService extends KiboRpcService {
 
         Mat nav_cam = api.getMatNavCam();
         //Mat dst = undistort_camera(nav_cam);
-
 
         DetectorParameters parameters = DetectorParameters.create();
         parameters.set_minDistanceToBorder(0);
