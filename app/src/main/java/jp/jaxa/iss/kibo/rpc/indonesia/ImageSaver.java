@@ -14,7 +14,7 @@ import static android.content.ContentValues.TAG;
 
 public class ImageSaver {
 
-    public static void save_image(Mat subimg){
+    public static void save_image(Mat subimg, String name){
 
         Bitmap bmp = null;
         try {
@@ -29,7 +29,7 @@ public class ImageSaver {
 
         FileOutputStream out = null;
 
-        String filename = "frame.png";
+        String filename = name;
 
 
         File sd = new File(Environment.getExternalStorageDirectory() + "/frames");

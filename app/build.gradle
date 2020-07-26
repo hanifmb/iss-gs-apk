@@ -32,7 +32,13 @@ android {
         exclude 'META-INF/dependencies.txt'
         exclude 'META-INF/LGPL2.1'
     }
+    sourceSets {
+        main.jniLibs.srcDirs = ['libs']
+        test.jniLibs.srcDirs = ['libs']
+    }
 }
+
+
 
 dependencies {
     compile project(':guest_science_library')
