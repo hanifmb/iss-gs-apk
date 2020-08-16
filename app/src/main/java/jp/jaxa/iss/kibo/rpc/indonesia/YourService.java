@@ -114,6 +114,7 @@ class QRData {
 
     static double getQuaW(){
 
+
         return 1.0 - Math.pow(Double.parseDouble(quaX), 2.0)
                 - Math.pow(Double.parseDouble(quaY), 2.0)
                 - Math.pow(Double.parseDouble(quaZ), 2.0);
@@ -131,6 +132,7 @@ class QRData {
 }
 
 public class YourService extends KiboRpcService {
+
 
     private Mat camMatrix;
     private Mat distCoeff;
@@ -215,14 +217,14 @@ public class YourService extends KiboRpcService {
         //moveToWrapper(11, -4.90, 4.33, 0.500, 0.500, -0.500, 0.500);
         //moveToWrapper(11, -5.60, 4.33, 0.500, 0.500, -0.500, 0.500);
 
-        moveToWrapper(11.3, -4.5, 4.95, 0, 0 ,1, 0);
+        moveToWrapper(11.3, -4.5, 4.95, 0, 0, 0.707, -0.707);
         moveToWrapper(10.7, -5.16, 4.42, 0, 0 ,1, 0);
 
         scanBuffer(0);
 
         moveToWrapper(10.7, -5.95, 4.42, 0, 0, 0.707, -0.707);
         moveToWrapper(10.455, -6.54, 4.42, 0, 0, 0.707, -0.707);
-        moveToWrapper(11.06, -7.68, 5.4, 0.5, 0.5 ,0.5, -0.5);
+        moveToWrapper(11.06, -7.68, 5.47, 0.5, 0.5 ,0.5, -0.5);
 
         scanBuffer(1);
 
@@ -292,6 +294,7 @@ public class YourService extends KiboRpcService {
         final Point point = new Point(pos_x, pos_y, pos_z);
         final Quaternion quaternion = new Quaternion((float) qua_x, (float) qua_y,
                 (float) qua_z, (float) qua_w);
+
 
         Log.i(TAG, "[0] Calling moveTo function ");
         long start = System.currentTimeMillis();
