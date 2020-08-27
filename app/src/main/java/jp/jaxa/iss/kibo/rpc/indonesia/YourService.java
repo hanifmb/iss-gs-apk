@@ -19,7 +19,6 @@ import com.google.zxing.RGBLuminanceSource;
 import com.google.zxing.common.HybridBinarizer;
 import com.google.zxing.qrcode.QRCodeReader;
 
-
 import org.apache.commons.io.FileUtils;
 import org.opencv.android.Utils;
 import org.opencv.aruco.Aruco;
@@ -60,6 +59,10 @@ class QRData {
     private static String quaX;
     private static String quaY;
     private static String quaZ;
+
+    private static Double radX;
+    private static Double radY;
+    private static Double radZ;
     static String Ar_Id;
 
     static void storePosition(String recData){
@@ -85,6 +88,7 @@ class QRData {
         quaX = arrOfStr[1].replaceAll("\\s+",""); //x
         quaY = arrOfStr[3].replaceAll("\\s+",""); //y
         quaZ = arrOfStr[5].replaceAll("\\s+",""); //z
+
 
     }
 
@@ -112,12 +116,24 @@ class QRData {
         return Float.parseFloat(quaZ);
     }
 
+    static double getRadX(){ return radX; }
+
+    static double getRadY(){ return radX; }
+
+    static double getRadZ(){ return radX; }
+
     static double getQuaW(){
 
+        if(QuaternionIsAvailable()){
 
-        return 1.0 - Math.pow(Double.parseDouble(quaX), 2.0)
-                - Math.pow(Double.parseDouble(quaY), 2.0)
-                - Math.pow(Double.parseDouble(quaZ), 2.0);
+            return 1.0 - Math.pow(Double.parseDouble(quaX), 2.0)
+                    - Math.pow(Double.parseDouble(quaY), 2.0)
+                    - Math.pow(Double.parseDouble(quaZ), 2.0);
+
+        } else {
+
+            return -1.0;
+        }
 
     }
 
@@ -128,6 +144,7 @@ class QRData {
     static Boolean QuaternionIsAvailable(){
         return quaX != null && quaY != null && quaZ != null;
     }
+
 
 }
 
@@ -220,13 +237,34 @@ public class YourService extends KiboRpcService {
         moveToWrapper(11.3, -4.5, 4.95, 0, 0, 0.707, -0.707);
         moveToWrapper(10.7, -5.16, 4.42, 0, 0 ,1, 0);
 
+
+        api.flashlightControlFront(0.025f);
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
         scanBuffer(0);
+
+        api.flashlightControlFront(0);
 
         moveToWrapper(10.7, -5.95, 4.42, 0, 0, 0.707, -0.707);
         moveToWrapper(10.455, -6.54, 4.42, 0, 0, 0.707, -0.707);
         moveToWrapper(11.06, -7.68, 5.47, 0.5, 0.5 ,0.5, -0.5);
 
+
+        api.flashlightControlFront(0.025f);
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
         scanBuffer(1);
+
+        api.flashlightControlFront(0);
+
 
         moveToWrapper(11.2, -7.78, 4.85, 0, 0, 0.707, -0.707);
         moveToWrapper(11.2, -9, 4.85, 0, 0, 0.707, -0.707);
@@ -301,6 +339,13 @@ public class YourService extends KiboRpcService {
 
         Result result = api.moveTo(point, quaternion, true);
 
+        if (result.getStatus() == Result.Status.BAD_SYNTAX) {
+
+            api.moveTo(22, 22)
+
+        }
+
+
         long end = System.currentTimeMillis();
         long elapsedTime = end - start;
         Log.i(TAG, "[0] moveTo finished in : " + elapsedTime/1000 + "seconds");
@@ -359,6 +404,7 @@ public class YourService extends KiboRpcService {
         initUndistortRectifyMap(camMatrix, distCoeff, new Mat(), camMatrix, new Size(1280,960), CV_16SC2, map1, map2 );
 
         for (Mat QR : QRBuffer){
+
 
             boolean success = decodeQR(targetQR, QR, 1280, 960, Image.UNDISTORT, "1280x960", reader);
 
