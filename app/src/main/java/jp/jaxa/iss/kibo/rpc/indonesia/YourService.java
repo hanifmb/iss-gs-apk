@@ -24,15 +24,21 @@ import org.opencv.android.Utils;
 import org.opencv.aruco.Aruco;
 import org.opencv.aruco.DetectorParameters;
 import org.opencv.aruco.Dictionary;
+import org.opencv.calib3d.Calib3d;
+import org.opencv.core.Core;
 import org.opencv.core.CvException;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.Rect;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 
 import static org.opencv.core.Core.BORDER_CONSTANT;
 import static org.opencv.core.Core.addWeighted;
+import static org.opencv.core.Core.determinant;
 import static org.opencv.core.CvType.CV_16SC2;
+import static org.opencv.core.CvType.CV_32F;
+import static org.opencv.imgcodecs.Imgcodecs.CV_IMWRITE_EXR_TYPE;
 import static org.opencv.imgcodecs.Imgcodecs.imread;
 import static org.opencv.imgproc.Imgproc.GaussianBlur;
 import static org.opencv.imgproc.Imgproc.INTER_LINEAR;
@@ -42,6 +48,7 @@ import static org.opencv.imgproc.Imgproc.remap;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -49,104 +56,6 @@ import java.util.Map;
 /**
  * Class meant to handle commands from the Ground Data System and execute them in Astrobee
  */
-
-//Struct like container for QR position and quaternion string data
-class QRData {
-
-    private static String posX;
-    private static String posY;
-    private static String posZ;
-    private static String quaX;
-    private static String quaY;
-    private static String quaZ;
-
-    private static Double radX;
-    private static Double radY;
-    private static Double radZ;
-    static String Ar_Id;
-
-    static void storePosition(String recData){
-        String[] arrOfStr;
-
-        //split the data to acquire only the component's value
-        arrOfStr = recData.split(",", 6);
-
-        //remove all white spaces
-        posX = arrOfStr[1].replaceAll("\\s+",""); //x
-        posY = arrOfStr[3].replaceAll("\\s+",""); //y
-        posZ = arrOfStr[5].replaceAll("\\s+",""); //z
-
-    }
-
-    static void storeQuaternion(String recData){
-        String[] arrOfStr;
-
-        //split the data to acquire only the component's value
-        arrOfStr = recData.split(",", 6);
-
-        //remove all white spaces
-        quaX = arrOfStr[1].replaceAll("\\s+",""); //x
-        quaY = arrOfStr[3].replaceAll("\\s+",""); //y
-        quaZ = arrOfStr[5].replaceAll("\\s+",""); //z
-
-
-    }
-
-    static double getPosX(){
-        return Float.parseFloat(posX);
-    }
-
-    static double getPosY(){
-        return Float.parseFloat(posY);
-    }
-
-    static double getPosZ(){
-        return Float.parseFloat(posZ);
-    }
-
-    static double getQuaX(){
-        return Float.parseFloat(quaX);
-    }
-
-    static double getQuaY(){
-        return Float.parseFloat(quaY);
-    }
-
-    static double getQuaZ(){
-        return Float.parseFloat(quaZ);
-    }
-
-    static double getRadX(){ return radX; }
-
-    static double getRadY(){ return radX; }
-
-    static double getRadZ(){ return radX; }
-
-    static double getQuaW(){
-
-        if(QuaternionIsAvailable()){
-
-            return 1.0 - Math.pow(Double.parseDouble(quaX), 2.0)
-                    - Math.pow(Double.parseDouble(quaY), 2.0)
-                    - Math.pow(Double.parseDouble(quaZ), 2.0);
-
-        } else {
-
-            return -1.0;
-        }
-
-    }
-
-    static Boolean PositionIsAvailable(){
-        return posX != null && posY != null && posZ != null;
-    }
-
-    static Boolean QuaternionIsAvailable(){
-        return quaX != null && quaY != null && quaZ != null;
-    }
-
-
-}
 
 public class YourService extends KiboRpcService {
 
@@ -274,18 +183,13 @@ public class YourService extends KiboRpcService {
             moveToWrapper(QRData.getPosX(), QRData.getPosY(), QRData.getPosZ(),
                     QRData.getQuaX(), QRData.getQuaY(), QRData.getQuaZ(), QRData.getQuaW());
 
-        }else if (QRData.PositionIsAvailable()){
-
-            moveToWrapper(QRData.getPosX(), QRData.getPosY(), QRData.getPosZ(),
-                    0, 0, 0.707, -0.707);
-
         }else{
             api.judgeSendFinishSimulation();
         }
 
-        Mat offset_ar = decodeAR();
+        List<Mat> offsetAR = decodeAR();
 
-        if (offset_ar != null){
+        if (offsetAR != null){
 
             //Offset data for lasering
             double offset_target_laser_x = 0.141421356; //0.1*sqrt(2) m
@@ -296,10 +200,21 @@ public class YourService extends KiboRpcService {
             double added_offset_z = -0.075;
 
             //Acquiring translation vector as the error offset
-            double[] offset_ar_largest = offset_ar.get(0, 0);
+            Mat OffsetARLargest1 = offsetAR.get(1);
+            double[] offsetArLargest = OffsetARLargest1.get(0, 0);
 
-            double p3_posx = QRData.getPosX() + offset_ar_largest[0] + offset_target_laser_x + offset_camera_x + added_offset_x;
-            double p3_posz = QRData.getPosZ() + offset_ar_largest[1] + offset_target_laser_z + offset_camera_z + added_offset_z;
+            /* quaternion orientation restriction
+
+            -phi < z < 0
+            -phi/2 < y < phi/2
+            -phi < x x < phi
+
+             quaternion to euler angle sequence
+             z -> y -> x
+             */
+
+            double p3_posx = QRData.getPosX() + offsetArLargest[0] + offset_target_laser_x + offset_camera_x + added_offset_x;
+            double p3_posz = QRData.getPosZ() + offsetArLargest[1] + offset_target_laser_z + offset_camera_z + added_offset_z;
 
             //move to target p3 for lasering (with plan B)
             double qr_pos_y = -9.58091874748;
@@ -315,7 +230,111 @@ public class YourService extends KiboRpcService {
 
     @Override
     protected void runPlan2() {
+        api.judgeSendStart();
+        initCamera(Param.SIMULATION);
 
+        List<Mat> offsetAR = decodeAR();
+
+        if (offsetAR != null) {
+
+            //Offset data for lasering
+
+            //Acquiring translation vector as the error offset
+
+            //Calculating Rotation Matrix (R21)
+            Mat rvec = offsetAR.get(0);
+            Mat tvec = offsetAR.get(1);
+
+            Log.d(TAG, "rvec" + rvec.dump());
+            Log.d(TAG, "tvec" + tvec.dump());
+
+            Mat rotM = new Mat(3, 3, CV_32F);
+
+            Calib3d.Rodrigues(rvec, rotM);
+            Log.d(TAG, "ROTATION MATRIX T21");
+            Log.d(TAG, rotM.dump());
+
+            //float det = (float) Core.determinant(rotM);
+            //Log.d(TAG, "DETERMINANT" + det);
+
+            Mat T21 = new Mat(4, 4, CV_32F);
+
+            //Arranging T21
+            float[] T21Scalar = {
+
+                    (float)rotM.get(0,0)[0], (float)rotM.get(0,1)[0], (float)rotM.get(0,2)[0], (float)tvec.get(0, 0)[0],
+                    (float)rotM.get(1,0)[0], (float)rotM.get(1,1)[0], (float)rotM.get(1,2)[0], (float)tvec.get(0, 0)[1],
+                    (float)rotM.get(2,0)[0], (float)rotM.get(2,1)[0], (float)rotM.get(2,2)[0], (float)tvec.get(0, 0)[2],
+                    0f, 0f, 0f, 1f
+            };
+
+            T21.put(0,0, T21Scalar);
+
+            Log.d(TAG, "TRANSFORMATION MATRIX T21");
+            Log.d(TAG, T21.dump());
+
+            //Calculating rotation matrix (R32)
+            Kinematics kinematics = api.getTrustedRobotKinematics();
+
+            if(kinematics.getConfidence() == Kinematics.Confidence.GOOD){
+                double posX = kinematics.getPosition().getX();
+                double posY = kinematics.getPosition().getY();
+                double posZ = kinematics.getPosition().getZ();
+
+                float quaX = kinematics.getOrientation().getX();
+                float quaY = kinematics.getOrientation().getY();
+                float quaZ = kinematics.getOrientation().getZ();
+                float quaW = (float)Math.sqrt(quaX*quaX + quaY*quaY + quaZ*quaZ);
+
+                Quaternion quaternion = new Quaternion(quaX, quaY, quaZ, quaW);
+                Mat rotM32 = quatToMatrix(quaternion);
+
+                float det = (float) Core.determinant(rotM32);
+                Log.d(TAG, "DETERMINANT" + det);
+
+                //Rearranging transformation matrix (T32)
+                float[] T32Scalar = {
+
+                        (float)rotM32.get(0,0)[0], (float)rotM32.get(0,1)[0], (float)rotM32.get(0,2)[0], (float)posX,
+                        (float)rotM32.get(1,0)[0], (float)rotM32.get(1,1)[0], (float)rotM32.get(1,2)[0], (float)posY,
+                        (float)rotM32.get(2,0)[0], (float)rotM32.get(2,1)[0], (float)rotM32.get(2,2)[0], (float)posZ,
+                        0, 0, 0, 1
+                };
+
+                Mat T32 = new Mat(4, 4, CV_32F);
+                T32.put(0, 0, T32Scalar);
+
+                Log.d(TAG, "TRANSFORMATION MATRIX T32");
+                Log.d(TAG, T32.dump());
+
+                //Calculating T31 = T32 * T21
+                Mat T31 = new Mat(4, 4, CV_32F);
+                Core.gemm(T32, T21, 1, new Mat(), 0, T31, 0);
+
+
+                Log.d(TAG, "TRANSFORMATION MATRIX T31");
+                Log.d(TAG, T31.dump());
+                Log.d(TAG, "DETERMINANT" + Core.determinant(T31));
+
+            }
+
+
+            /* quaternion orientation restriction
+
+            -phi < z < 0
+            -phi/2 < y < phi/2
+            -phi < x x < phi
+
+             quaternion to euler angle sequence
+             z -> y -> x
+             */
+
+            //move to target p3 for lasering (with plan B)
+            double qr_pos_y = -9.58091874748;
+
+
+            api.laserControl(true);
+        }
     }
 
     @Override
@@ -338,13 +357,7 @@ public class YourService extends KiboRpcService {
         long start = System.currentTimeMillis();
 
         Result result = api.moveTo(point, quaternion, true);
-
-        if (result.getStatus() == Result.Status.BAD_SYNTAX) {
-
-            api.moveTo(22, 22)
-
-        }
-
+        
 
         long end = System.currentTimeMillis();
         long elapsedTime = end - start;
@@ -523,7 +536,7 @@ public class YourService extends KiboRpcService {
         return false;
     }
 
-    private Mat decodeAR(){
+    private List<Mat> decodeAR(){
         Mat markerIds = new Mat();
         List<Mat> corners= new ArrayList<>();
         List<Mat> rejected= new ArrayList<>();
@@ -564,7 +577,12 @@ public class YourService extends KiboRpcService {
                 Log.i("rejected", Integer.toString(rejected.size()));
                 */
 
-                return tvec;
+                List<Mat> transform = new ArrayList<Mat>();
+                transform.add(rvec);
+                transform.add(tvec);
+                return transform;
+
+
             }
 
             Log.i(TAG, "AR Not Found : " + (i + 1));
@@ -582,11 +600,85 @@ public class YourService extends KiboRpcService {
             Utils.matToBitmap(in, bmp);
 
         }
-        catch (CvException e){Log.d("Exception",e.getMessage());}
+        catch (CvException e){Log.d("Exception", e.getMessage());}
 
         return bmp;
     }
 
-}
+    private Kinematics getCurrentPosition(){
 
+        Kinematics kinematics= api.getTrustedRobotKinematics();
+
+        if(kinematics.getConfidence() == Kinematics.Confidence.GOOD
+                || kinematics.getConfidence() == Kinematics.Confidence.POOR){
+
+            return kinematics;
+
+        }else{
+
+            return null;
+
+        }
+    }
+
+    private Point calculateARPos(Kinematics kinematics, Mat ArOffset){
+
+        double posX, posY, posZ;
+
+        if(kinematics.getConfidence() == Kinematics.Confidence.GOOD){
+
+
+        }
+
+
+        posX = 1;
+        posY = 1;
+        posZ = 1;
+        Point point = new Point(posX, posY, posZ);
+        return point;
+    }
+
+    public final Mat quatToMatrix(Quaternion q){
+        float sqw = q.getW()*q.getW();
+        float sqx = q.getW()*q.getX();
+        float sqy = q.getY()*q.getY();
+        float sqz = q.getZ()*q.getZ();
+
+        // invs (inverse square length) is only required if quaternion is not already normalised
+        float invs = 1.0f;
+        float m00 = ( sqx - sqy - sqz + sqw)*invs ; // since sqw + sqx + sqy + sqz =1/invs*invs
+        float m11 = (-sqx + sqy - sqz + sqw)*invs ;
+        float m22 = (-sqx - sqy + sqz + sqw)*invs ;
+
+        float tmp1 = q.getX()*q.getY();
+        float tmp2 = q.getZ()*q.getW();
+        float m10 = 2.0f * (tmp1 + tmp2)*invs ;
+        float m01 = 2.0f * (tmp1 - tmp2)*invs ;
+
+        tmp1 = q.getX()*q.getZ();
+        tmp2 = q.getY()*q.getW();
+        float m20 = 2.0f * (tmp1 - tmp2)*invs ;
+        float m02 = 2.0f * (tmp1 + tmp2)*invs ;
+        tmp1 = q.getY()*q.getZ();
+        tmp2 = q.getX()*q.getW();
+        float m21 = 2.0f * (tmp1 + tmp2)*invs ;
+        float m12 = 2.0f * (tmp1 - tmp2)*invs ;
+
+        Mat rotationMatrix = new Mat(3, 3, CV_32F);
+        float[] rotM = {
+             m00, m01, m02,
+             m10, m11, m12,
+             m20, m21, m22
+        };
+        rotationMatrix.put(0,0, rotM);
+
+        Log.d(TAG, "ROTATION MATRIX");
+        Log.d(TAG, rotationMatrix.dump());
+
+        return rotationMatrix;
+
+    }
+
+
+}
 
