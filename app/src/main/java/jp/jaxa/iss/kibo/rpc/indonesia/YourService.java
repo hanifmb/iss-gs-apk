@@ -38,6 +38,7 @@ import static org.opencv.core.Core.addWeighted;
 import static org.opencv.core.Core.determinant;
 import static org.opencv.core.CvType.CV_16SC2;
 import static org.opencv.core.CvType.CV_32F;
+import static org.opencv.core.CvType.CV_64F;
 import static org.opencv.imgcodecs.Imgcodecs.CV_IMWRITE_EXR_TYPE;
 import static org.opencv.imgcodecs.Imgcodecs.imread;
 import static org.opencv.imgproc.Imgproc.GaussianBlur;
@@ -248,7 +249,7 @@ public class YourService extends KiboRpcService {
             Log.d(TAG, "rvec" + rvec.dump());
             Log.d(TAG, "tvec" + tvec.dump());
 
-            Mat rotM = new Mat(3, 3, CV_32F);
+            Mat rotM = new Mat(3, 3, CV_64F);
 
             Calib3d.Rodrigues(rvec, rotM);
             Log.d(TAG, "ROTATION MATRIX T21");
@@ -257,21 +258,34 @@ public class YourService extends KiboRpcService {
             //float det = (float) Core.determinant(rotM);
             //Log.d(TAG, "DETERMINANT" + det);
 
-            Mat T21 = new Mat(4, 4, CV_32F);
+            Mat T21 = new Mat(4, 4, CV_64F);
 
             //Arranging T21
-            float[] T21Scalar = {
+            double[] T21Scalar = {
 
-                    (float)rotM.get(0,0)[0], (float)rotM.get(0,1)[0], (float)rotM.get(0,2)[0], (float)tvec.get(0, 0)[0],
-                    (float)rotM.get(1,0)[0], (float)rotM.get(1,1)[0], (float)rotM.get(1,2)[0], (float)tvec.get(0, 0)[1],
-                    (float)rotM.get(2,0)[0], (float)rotM.get(2,1)[0], (float)rotM.get(2,2)[0], (float)tvec.get(0, 0)[2],
-                    0f, 0f, 0f, 1f
+                    rotM.get(0,0)[0], rotM.get(0,1)[0], rotM.get(0,2)[0], tvec.get(0, 0)[0],
+                    rotM.get(1,0)[0], rotM.get(1,1)[0], rotM.get(1,2)[0], tvec.get(0, 0)[1],
+                    rotM.get(2,0)[0], rotM.get(2,1)[0], rotM.get(2,2)[0], tvec.get(0, 0)[2],
+                    0, 0, 0, 1
             };
 
             T21.put(0,0, T21Scalar);
 
             Log.d(TAG, "TRANSFORMATION MATRIX T21");
             Log.d(TAG, T21.dump());
+
+            //Calculating transformation matrix between robot and camera
+            double[] TrcScalar = {
+
+                    0.0000000,  0.0000000,  1.000000, 0.1177,
+                    1.0000000,  0.0000000,  0.0000000, -0.0422,
+                    0.0000000,  1.0000000,  0.0000000, -0.0826,
+                    0.0000000,  0.0000000,  0.0000000, 1.0000
+
+            };
+
+            Mat Trc = new Mat(4, 4, CV_64F);
+            Trc.put(0, 0, TrcScalar);
 
             //Calculating rotation matrix (R32)
             Kinematics kinematics = api.getTrustedRobotKinematics();
@@ -287,34 +301,44 @@ public class YourService extends KiboRpcService {
                 float quaW = (float)Math.sqrt(quaX*quaX + quaY*quaY + quaZ*quaZ);
 
                 Quaternion quaternion = new Quaternion(quaX, quaY, quaZ, quaW);
-                Mat rotM32 = quatToMatrix(quaternion);
+                Mat rotM32 = quatToMatrix2(quaternion);
 
-                float det = (float) Core.determinant(rotM32);
+                double det = Core.determinant(rotM32);
                 Log.d(TAG, "DETERMINANT" + det);
 
                 //Rearranging transformation matrix (T32)
-                float[] T32Scalar = {
+                double[] T32Scalar = {
 
-                        (float)rotM32.get(0,0)[0], (float)rotM32.get(0,1)[0], (float)rotM32.get(0,2)[0], (float)posX,
-                        (float)rotM32.get(1,0)[0], (float)rotM32.get(1,1)[0], (float)rotM32.get(1,2)[0], (float)posY,
-                        (float)rotM32.get(2,0)[0], (float)rotM32.get(2,1)[0], (float)rotM32.get(2,2)[0], (float)posZ,
+                        rotM32.get(0,0)[0], rotM32.get(0,1)[0], rotM32.get(0,2)[0], posX,
+                        rotM32.get(1,0)[0], rotM32.get(1,1)[0], rotM32.get(1,2)[0], posY,
+                        rotM32.get(2,0)[0], rotM32.get(2,1)[0], rotM32.get(2,2)[0], posZ,
                         0, 0, 0, 1
                 };
 
-                Mat T32 = new Mat(4, 4, CV_32F);
+                Mat T32 = new Mat(4, 4, CV_64F);
                 T32.put(0, 0, T32Scalar);
 
                 Log.d(TAG, "TRANSFORMATION MATRIX T32");
                 Log.d(TAG, T32.dump());
 
                 //Calculating T31 = T32 * T21
-                Mat T31 = new Mat(4, 4, CV_32F);
-                Core.gemm(T32, T21, 1, new Mat(), 0, T31, 0);
+                Mat T31 = new Mat(4, 4, CV_64F);
+                Mat Ttemp = new Mat(4, 4, CV_64F);
+
+                Core.gemm(T32, Trc, 1, new Mat(), 0, Ttemp, 0);
+                Core.gemm(Ttemp, T21, 1, new Mat(), 0, T31, 0);
 
 
                 Log.d(TAG, "TRANSFORMATION MATRIX T31");
                 Log.d(TAG, T31.dump());
                 Log.d(TAG, "DETERMINANT" + Core.determinant(T31));
+
+                double targetX = T31.get(0, 3)[0];
+                double targetY = posY;
+                double targetZ = T31.get(2, 3)[0];
+
+                moveToWrapper(targetX, targetY, targetZ,0, 0, 0.707, -0.707);
+                api.laserControl(true);
 
             }
 
@@ -339,7 +363,11 @@ public class YourService extends KiboRpcService {
 
     @Override
     protected void runPlan3() {
+        moveToWrapper(11, -5.60, 4.32,
+                0.500, 0.500, -0.500, 0.500);
+        moveToWrapper(11.37, -5.70, 4.5, 0, 0, 0, 1);
 
+        moveToWrapper(11, -6, 5.45,  0.707, 0,  0.707, 0);
     }
 
 
@@ -605,67 +633,35 @@ public class YourService extends KiboRpcService {
         return bmp;
     }
 
-    private Kinematics getCurrentPosition(){
-
-        Kinematics kinematics= api.getTrustedRobotKinematics();
-
-        if(kinematics.getConfidence() == Kinematics.Confidence.GOOD
-                || kinematics.getConfidence() == Kinematics.Confidence.POOR){
-
-            return kinematics;
-
-        }else{
-
-            return null;
-
-        }
-    }
-
-    private Point calculateARPos(Kinematics kinematics, Mat ArOffset){
-
-        double posX, posY, posZ;
-
-        if(kinematics.getConfidence() == Kinematics.Confidence.GOOD){
-
-
-        }
-
-
-        posX = 1;
-        posY = 1;
-        posZ = 1;
-        Point point = new Point(posX, posY, posZ);
-        return point;
-    }
 
     public final Mat quatToMatrix(Quaternion q){
-        float sqw = q.getW()*q.getW();
-        float sqx = q.getW()*q.getX();
-        float sqy = q.getY()*q.getY();
-        float sqz = q.getZ()*q.getZ();
+        double sqw = q.getW()*q.getW();
+        double sqx = q.getW()*q.getX();
+        double sqy = q.getY()*q.getY();
+        double sqz = q.getZ()*q.getZ();
 
         // invs (inverse square length) is only required if quaternion is not already normalised
-        float invs = 1.0f;
-        float m00 = ( sqx - sqy - sqz + sqw)*invs ; // since sqw + sqx + sqy + sqz =1/invs*invs
-        float m11 = (-sqx + sqy - sqz + sqw)*invs ;
-        float m22 = (-sqx - sqy + sqz + sqw)*invs ;
+        double invs = 1.0f;
+        double m00 = ( sqx - sqy - sqz + sqw)*invs ; // since sqw + sqx + sqy + sqz =1/invs*invs
+        double m11 = (-sqx + sqy - sqz + sqw)*invs ;
+        double m22 = (-sqx - sqy + sqz + sqw)*invs ;
 
-        float tmp1 = q.getX()*q.getY();
-        float tmp2 = q.getZ()*q.getW();
-        float m10 = 2.0f * (tmp1 + tmp2)*invs ;
-        float m01 = 2.0f * (tmp1 - tmp2)*invs ;
+        double tmp1 = q.getX()*q.getY();
+        double tmp2 = q.getZ()*q.getW();
+        double m10 = 2.0 * (tmp1 + tmp2)*invs ;
+        double m01 = 2.0 * (tmp1 - tmp2)*invs ;
 
         tmp1 = q.getX()*q.getZ();
         tmp2 = q.getY()*q.getW();
-        float m20 = 2.0f * (tmp1 - tmp2)*invs ;
-        float m02 = 2.0f * (tmp1 + tmp2)*invs ;
+        double m20 = 2.0 * (tmp1 - tmp2)*invs ;
+        double m02 = 2.0 * (tmp1 + tmp2)*invs ;
         tmp1 = q.getY()*q.getZ();
         tmp2 = q.getX()*q.getW();
-        float m21 = 2.0f * (tmp1 + tmp2)*invs ;
-        float m12 = 2.0f * (tmp1 - tmp2)*invs ;
+        double m21 = 2.0 * (tmp1 + tmp2)*invs ;
+        double m12 = 2.0 * (tmp1 - tmp2)*invs ;
 
-        Mat rotationMatrix = new Mat(3, 3, CV_32F);
-        float[] rotM = {
+        Mat rotationMatrix = new Mat(3, 3, CV_64F);
+        double[] rotM = {
              m00, m01, m02,
              m10, m11, m12,
              m20, m21, m22
@@ -676,6 +672,28 @@ public class YourService extends KiboRpcService {
         Log.d(TAG, rotationMatrix.dump());
 
         return rotationMatrix;
+
+    }
+
+    private Mat quatToMatrix2(Quaternion q){
+
+        double qw = q.getW();
+        double qx = q.getX();
+        double qy = q.getY();
+        double qz = q.getZ();
+
+        Mat rotM = new Mat(3, 3, CV_64F);
+
+        double[] rotMElements = {
+
+            1.0 - 2.0*qy*qy - 2.0*qz*qz, 2.0*qx*qy - 2.0*qz*qw, 2.0*qx*qz + 2.0*qy*qw,
+            2.0*qx*qy + 2.0*qz*qw, 1.0 - 2.0*qx*qx - 2.0*qz*qz, 2.0*qy*qz - 2.0*qx*qw,
+            2.0*qx*qz - 2.0*qy*qw, 2.0*qy*qz + 2.0*qx*qw, 1.0 - 2.0*qx*qx - 2.0*qy*qy
+
+        };
+
+        rotM.put(0, 0, rotMElements);
+        return rotM;
 
     }
 
