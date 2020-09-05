@@ -46,6 +46,7 @@ import static org.opencv.imgproc.Imgproc.INTER_LINEAR;
 import static org.opencv.imgproc.Imgproc.filter2D;
 import static org.opencv.imgproc.Imgproc.initUndistortRectifyMap;
 import static org.opencv.imgproc.Imgproc.remap;
+import static org.opencv.imgproc.Imgproc.warpAffine;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -59,7 +60,6 @@ import java.util.Map;
  */
 
 public class YourService extends KiboRpcService {
-
 
     private Mat camMatrix;
     private Mat distCoeff;
@@ -158,13 +158,12 @@ public class YourService extends KiboRpcService {
         scanBuffer(0);
 
         api.flashlightControlFront(0);
-
         moveToWrapper(10.7, -5.95, 4.42, 0, 0, 0.707, -0.707);
         moveToWrapper(10.455, -6.54, 4.42, 0, 0, 0.707, -0.707);
         moveToWrapper(11.06, -7.68, 5.47, 0.5, 0.5 ,0.5, -0.5);
 
-
         api.flashlightControlFront(0.025f);
+
         try {
             Thread.sleep(1000);
         } catch (InterruptedException e) {
@@ -175,107 +174,106 @@ public class YourService extends KiboRpcService {
 
         api.flashlightControlFront(0);
 
-
         moveToWrapper(11.2, -7.78, 4.85, 0, 0, 0.707, -0.707);
         moveToWrapper(11.2, -9, 4.85, 0, 0, 0.707, -0.707);
 
         if(QRData.PositionIsAvailable() && QRData.QuaternionIsAvailable()){
 
+            /*
+
+            moveToWrapper(QRData.getPosX(), QRData.getPosY(), QRData.getPosZ(),
+                    0, 0, 0.707, -0.707);
+
+             */
+
             moveToWrapper(QRData.getPosX(), QRData.getPosY(), QRData.getPosZ(),
                     QRData.getQuaX(), QRData.getQuaY(), QRData.getQuaZ(), QRData.getQuaW());
+
 
         }else{
             api.judgeSendFinishSimulation();
         }
 
-        List<Mat> offsetAR = decodeAR();
+        /*
+        Tal = Laser target transformation matrix w.r.t AR Tag
+        Tcr = AR Tag transformation matrix w.r.t camera
+        Tac = Camera transformation matrix w.r.t astrobee
+        Twa = Astrobee transformation matrix w.r.t ISS(world)
 
-        if (offsetAR != null){
+        Twr = AR Tag transformation matrix w.r.t ISS
+        Twl = Laser target transformation matrix w.r.t ISS
 
-            //Offset data for lasering
-            double offset_target_laser_x = 0.141421356; //0.1*sqrt(2) m
-            double offset_target_laser_z = 0.141421356;
-            double offset_camera_x = -0.0572;
-            double offset_camera_z = 0.1111;
-            double added_offset_x = -0.054;
-            double added_offset_z = -0.075;
-
-            //Acquiring translation vector as the error offset
-            Mat OffsetARLargest1 = offsetAR.get(1);
-            double[] offsetArLargest = OffsetARLargest1.get(0, 0);
-
-            /* quaternion orientation restriction
-
-            -phi < z < 0
-            -phi/2 < y < phi/2
-            -phi < x x < phi
-
-             quaternion to euler angle sequence
-             z -> y -> x
-             */
-
-            double p3_posx = QRData.getPosX() + offsetArLargest[0] + offset_target_laser_x + offset_camera_x + added_offset_x;
-            double p3_posz = QRData.getPosZ() + offsetArLargest[1] + offset_target_laser_z + offset_camera_z + added_offset_z;
-
-            //move to target p3 for lasering (with plan B)
-            double qr_pos_y = -9.58091874748;
-            moveToWrapper(p3_posx, qr_pos_y , p3_posz , 0, 0, 0.707, -0.707);
-
-            api.laserControl(true);
-        }
-
-        //api.judgeSendFinishISS();
-        api.judgeSendFinishSimulation();
-    }
-
-
-    @Override
-    protected void runPlan2() {
-        api.judgeSendStart();
-        initCamera(Param.SIMULATION);
+        Twl = Twa * Tac * Tcr * Tal
+         */
 
         List<Mat> offsetAR = decodeAR();
 
         if (offsetAR != null) {
+            double[] TrlElements = {
+                    /*
+                    P = [x, y, z];  P is the 20 cm offset between AR and Laser target
 
-            //Offset data for lasering
+                    Tac =
+                    [ rotMal, P ]
+                    [    0  , 1 ]
 
-            //Acquiring translation vector as the error offset
+                    rotMal is the 0 rotation -> object on the same plane
+                     */
 
-            //Calculating Rotation Matrix (R21)
+                    1.0000000,  0.0000000,  0.0000000, 0.1414213,
+                    0.0000000,  1.0000000,  0.0000000, -0.1414213,
+                    0.0000000,  0.0000000,  1.0000000, 0.0000000,
+                    0.0000000,  0.0000000,  0.0000000, 1.0000000
+
+            };
+            Mat Trl = new Mat(4, 4, CV_64F);
+            Trl.put(0, 0, TrlElements);
+
             Mat rvec = offsetAR.get(0);
             Mat tvec = offsetAR.get(1);
 
             Log.d(TAG, "rvec" + rvec.dump());
             Log.d(TAG, "tvec" + tvec.dump());
 
-            Mat rotM = new Mat(3, 3, CV_64F);
+            Mat rotMcr = new Mat(3, 3, CV_64F);
 
-            Calib3d.Rodrigues(rvec, rotM);
-            Log.d(TAG, "ROTATION MATRIX T21");
-            Log.d(TAG, rotM.dump());
+            //Converting rotation vector to rotation matrix, AR tag orientation
+            Calib3d.Rodrigues(rvec, rotMcr);
+            Log.d(TAG, "ROTATION MATRIX CAMERA-AR");
+            Log.d(TAG, rotMcr.dump());
 
-            //float det = (float) Core.determinant(rotM);
-            //Log.d(TAG, "DETERMINANT" + det);
+            Mat Tcr = new Mat(4, 4, CV_64F);
 
-            Mat T21 = new Mat(4, 4, CV_64F);
+            //Building AR transformation matrix w.r.t AR tag
+            double[] TcrElements = {
+                    /*
+                    P = [x, y, z];  P is the AR tag translation vector
 
-            //Arranging T21
-            double[] T21Scalar = {
+                    Tac =
+                    [ rotMcr, P ]
+                    [    0  , 1 ]
+                     */
 
-                    rotM.get(0,0)[0], rotM.get(0,1)[0], rotM.get(0,2)[0], tvec.get(0, 0)[0],
-                    rotM.get(1,0)[0], rotM.get(1,1)[0], rotM.get(1,2)[0], tvec.get(0, 0)[1],
-                    rotM.get(2,0)[0], rotM.get(2,1)[0], rotM.get(2,2)[0], tvec.get(0, 0)[2],
-                    0, 0, 0, 1
+                    rotMcr.get(0,0)[0], rotMcr.get(0,1)[0], rotMcr.get(0,2)[0], tvec.get(0, 0)[0],
+                    rotMcr.get(1,0)[0], rotMcr.get(1,1)[0], rotMcr.get(1,2)[0], tvec.get(0, 0)[1],
+                    rotMcr.get(2,0)[0], rotMcr.get(2,1)[0], rotMcr.get(2,2)[0], tvec.get(0, 0)[2],
+                    0.00000, 0.00000, 0.00000, 1.00000
             };
 
-            T21.put(0,0, T21Scalar);
+            Tcr.put(0,0, TcrElements);
 
-            Log.d(TAG, "TRANSFORMATION MATRIX T21");
-            Log.d(TAG, T21.dump());
+            Log.d(TAG, "TRANSFORMATION MATRIX CAMERA-AR");
+            Log.d(TAG, Tcr.dump());
 
-            //Calculating transformation matrix between robot and camera
-            double[] TrcScalar = {
+            //Building robot transformation matrix w.r.t camera
+            double[] TacElements = {
+                    /*
+                    P = [x, y, z];  P is the astrobee camera offset
+
+                    Tac =
+                    [ rotMac, P ]
+                    [   0   , 1 ]
+                     */
 
                     0.0000000,  0.0000000,  1.000000, 0.1177,
                     1.0000000,  0.0000000,  0.0000000, -0.0422,
@@ -284,10 +282,10 @@ public class YourService extends KiboRpcService {
 
             };
 
-            Mat Trc = new Mat(4, 4, CV_64F);
-            Trc.put(0, 0, TrcScalar);
+            Mat Tac = new Mat(4, 4, CV_64F);
+            Tac.put(0, 0, TacElements);
 
-            //Calculating rotation matrix (R32)
+            //Calculating rotation matrix of astrobee w.r.t ISS
             Kinematics kinematics = api.getTrustedRobotKinematics();
 
             if(kinematics.getConfidence() == Kinematics.Confidence.GOOD){
@@ -298,64 +296,250 @@ public class YourService extends KiboRpcService {
                 float quaX = kinematics.getOrientation().getX();
                 float quaY = kinematics.getOrientation().getY();
                 float quaZ = kinematics.getOrientation().getZ();
-                float quaW = (float)Math.sqrt(quaX*quaX + quaY*quaY + quaZ*quaZ);
+                float quaW = kinematics.getOrientation().getW();
+
+                Log.d(TAG, "CURRENT POSITION OF ASTROBEE");
+                Log.d(TAG, quaX + " " + quaY + " " + quaZ + " " + quaW);
+                Log.d(TAG, posX + " " + posY + " " + posZ);
 
                 Quaternion quaternion = new Quaternion(quaX, quaY, quaZ, quaW);
-                Mat rotM32 = quatToMatrix2(quaternion);
+                Mat rotMwa = quatToMatrix2(quaternion);
 
-                double det = Core.determinant(rotM32);
-                Log.d(TAG, "DETERMINANT" + det);
+                Log.d(TAG, "ROTATION MATRIX ISS-ASTROBEE");
+                Log.d(TAG, rotMwa.dump());
 
-                //Rearranging transformation matrix (T32)
-                double[] T32Scalar = {
+                double det = Core.determinant(rotMwa);
+                Log.d(TAG, "DETERMINANT = " + det);
 
-                        rotM32.get(0,0)[0], rotM32.get(0,1)[0], rotM32.get(0,2)[0], posX,
-                        rotM32.get(1,0)[0], rotM32.get(1,1)[0], rotM32.get(1,2)[0], posY,
-                        rotM32.get(2,0)[0], rotM32.get(2,1)[0], rotM32.get(2,2)[0], posZ,
-                        0, 0, 0, 1
+                //Building transformation matrix ISS-ASTROBEE
+                double[] TwaElements = {
+                        /*
+                        P = [x, y, z];  P is the astrobee global position (w.r.t ISS)
+
+                        Tac =
+                        [ rotMwa, P ]
+                        [   0   , 1 ]
+                         */
+
+                        rotMwa.get(0,0)[0], rotMwa.get(0,1)[0], rotMwa.get(0,2)[0], posX,
+                        rotMwa.get(1,0)[0], rotMwa.get(1,1)[0], rotMwa.get(1,2)[0], posY,
+                        rotMwa.get(2,0)[0], rotMwa.get(2,1)[0], rotMwa.get(2,2)[0], posZ,
+                        0.00000, 0.00000, 0.00000, 1.00000
                 };
 
-                Mat T32 = new Mat(4, 4, CV_64F);
-                T32.put(0, 0, T32Scalar);
+                Mat Twa = new Mat(4, 4, CV_64F);
+                Twa.put(0, 0, TwaElements);
 
-                Log.d(TAG, "TRANSFORMATION MATRIX T32");
-                Log.d(TAG, T32.dump());
+                Log.d(TAG, "TRANSFORMATION MATRIX ISS-ASTROBEE");
+                Log.d(TAG, Twa.dump());
 
-                //Calculating T31 = T32 * T21
-                Mat T31 = new Mat(4, 4, CV_64F);
-                Mat Ttemp = new Mat(4, 4, CV_64F);
+                //Calculating Twr = Twa * Tac * Tcr
+                Mat Twr = new Mat(4, 4, CV_64F);
+                Mat Twc = new Mat(4, 4, CV_64F);
+                Mat Twl = new Mat(4, 4, CV_64F);
 
-                Core.gemm(T32, Trc, 1, new Mat(), 0, Ttemp, 0);
-                Core.gemm(Ttemp, T21, 1, new Mat(), 0, T31, 0);
+                Core.gemm(Twa, Tac, 1, new Mat(), 0, Twc, 0);
+                Core.gemm(Twc, Tcr, 1, new Mat(), 0, Twr, 0);
+                Core.gemm(Twr, Trl, 1, new Mat(), 0, Twl, 0);
+
+                Log.d(TAG, "TRANSFORMATION MATRIX ISS-AR Tag");
+                Log.d(TAG, Twr.dump());
+
+                Log.d(TAG, "TRANSFORMATION MATRIX ISS-Laser Tag");
+                Log.d(TAG, Twl.dump());
+
+                double targetX = Twr.get(0, 3)[0];
+                double targetZ = Twr.get(2, 3)[0];
+
+                targetX -= 0.0572;
+                targetZ += 0.1111;
+
+                targetX += 0.1414;
+                targetZ += 0.1414;
+
+                moveToWrapper(targetX, posY, targetZ,0, 0, 0.707, -0.707);
+
+                api.laserControl(true);
+
+                api.judgeSendFinishSimulation();
+
+            }
+        }
+        //api.judgeSendFinishISS();
+        api.judgeSendFinishSimulation();
+    }
 
 
-                Log.d(TAG, "TRANSFORMATION MATRIX T31");
-                Log.d(TAG, T31.dump());
-                Log.d(TAG, "DETERMINANT" + Core.determinant(T31));
+    @Override
+    protected void runPlan2() {
+        /*
+        Tal = Laser target transformation matrix w.r.t AR Tag
+        Tcr = AR Tag transformation matrix w.r.t camera
+        Tac = Camera transformation matrix w.r.t astrobee
+        Twa = Astrobee transformation matrix w.r.t ISS(world)
 
-                double targetX = T31.get(0, 3)[0];
-                double targetY = posY;
-                double targetZ = T31.get(2, 3)[0];
+        Twr = AR Tag transformation matrix w.r.t ISS
+        Twl = Laser target transformation matrix w.r.t ISS
 
-                moveToWrapper(targetX, targetY, targetZ,0, 0, 0.707, -0.707);
+        Twl = Twa * Tac * Tcr * Tal
+         */
+
+        api.judgeSendStart();
+        initCamera(Param.SIMULATION);
+
+        List<Mat> offsetAR = decodeAR();
+
+        if (offsetAR != null) {
+            double[] TrlElements = {
+                    /*
+                    P = [x, y, z];  P is the 20 cm offset between AR and Laser target
+
+                    Tac =
+                    [ rotMal, P ]
+                    [    0  , 1 ]
+
+                    rotMal is the 0 rotation -> object on the same plane
+                     */
+
+                    1.0000000,  0.0000000,  0.0000000, 0.1414213,
+                    0.0000000,  1.0000000,  0.0000000, -0.1414213,
+                    0.0000000,  0.0000000,  1.0000000, 0.0000000,
+                    0.0000000,  0.0000000,  0.0000000, 1.0000000
+
+            };
+            Mat Trl = new Mat(4, 4, CV_64F);
+            Trl.put(0, 0, TrlElements);
+
+            Mat rvec = offsetAR.get(0);
+            Mat tvec = offsetAR.get(1);
+
+            Log.d(TAG, "rvec" + rvec.dump());
+            Log.d(TAG, "tvec" + tvec.dump());
+
+            Mat rotMcr = new Mat(3, 3, CV_64F);
+
+            //Converting rotation vector to rotation matrix, AR tag orientation
+            Calib3d.Rodrigues(rvec, rotMcr);
+            Log.d(TAG, "ROTATION MATRIX CAMERA-AR");
+            Log.d(TAG, rotMcr.dump());
+
+            Mat Tcr = new Mat(4, 4, CV_64F);
+
+            //Building AR transformation matrix w.r.t AR tag
+            double[] TcrElements = {
+                    /*
+                    P = [x, y, z];  P is the AR tag translation vector
+
+                    Tac =
+                    [ rotMcr, P ]
+                    [    0  , 1 ]
+                     */
+
+                    rotMcr.get(0,0)[0], rotMcr.get(0,1)[0], rotMcr.get(0,2)[0], tvec.get(0, 0)[0],
+                    rotMcr.get(1,0)[0], rotMcr.get(1,1)[0], rotMcr.get(1,2)[0], tvec.get(0, 0)[1],
+                    rotMcr.get(2,0)[0], rotMcr.get(2,1)[0], rotMcr.get(2,2)[0], tvec.get(0, 0)[2],
+                    0.00000, 0.00000, 0.00000, 1.00000
+            };
+
+            Tcr.put(0,0, TcrElements);
+
+            Log.d(TAG, "TRANSFORMATION MATRIX CAMERA-AR");
+            Log.d(TAG, Tcr.dump());
+
+            //Building robot transformation matrix w.r.t camera
+            double[] TacElements = {
+                    /*
+                    P = [x,
+                         y,
+                         z];  P is the astrobee camera offset
+
+                    Tac =
+                    [ rotMac, P ]
+                    [   0   , 1 ]
+                     */
+
+                    0.0000000,  0.0000000,  1.000000, 0.1177,
+                    1.0000000,  0.0000000,  0.0000000, -0.0422,
+                    0.0000000,  1.0000000,  0.0000000, -0.0826,
+                    0.0000000,  0.0000000,  0.0000000, 1.0000
+
+            };
+
+            Mat Tac = new Mat(4, 4, CV_64F);
+            Tac.put(0, 0, TacElements);
+
+            //Calculating rotation matrix of astrobee w.r.t ISS
+            Kinematics kinematics = api.getTrustedRobotKinematics();
+
+            if(kinematics.getConfidence() == Kinematics.Confidence.GOOD){
+                double posX = kinematics.getPosition().getX();
+                double posY = kinematics.getPosition().getY();
+                double posZ = kinematics.getPosition().getZ();
+
+                float quaX = kinematics.getOrientation().getX();
+                float quaY = kinematics.getOrientation().getY();
+                float quaZ = kinematics.getOrientation().getZ();
+                float quaW = kinematics.getOrientation().getW();
+
+                Quaternion quaternion = new Quaternion(quaX, quaY, quaZ, quaW);
+                Mat rotMwa = quatToMatrix2(quaternion);
+
+                Log.d(TAG, "ROTATION MATRIX ISS-ASTROBEE");
+                Log.d(TAG, rotMwa.dump());
+
+                double det = Core.determinant(rotMwa);
+                Log.d(TAG, "DETERMINANT = " + det);
+
+                //Building transformation matrix ISS-ASTROBEE
+                double[] TwaElements = {
+                        /*
+                        P = [x, y, z];  P is the astrobee global position (w.r.t ISS)
+
+                        Tac =
+                        [ rotMwa, P ]
+                        [   0   , 1 ]
+                         */
+
+                        rotMwa.get(0,0)[0], rotMwa.get(0,1)[0], rotMwa.get(0,2)[0], posX,
+                        rotMwa.get(1,0)[0], rotMwa.get(1,1)[0], rotMwa.get(1,2)[0], posY,
+                        rotMwa.get(2,0)[0], rotMwa.get(2,1)[0], rotMwa.get(2,2)[0], posZ,
+                        0.00000, 0.00000, 0.00000, 1.00000
+                };
+
+                Mat Twa = new Mat(4, 4, CV_64F);
+                Twa.put(0, 0, TwaElements);
+
+                Log.d(TAG, "TRANSFORMATION MATRIX ISS-ASTROBEE");
+                Log.d(TAG, Twa.dump());
+
+                //Calculating Twr = Twa * Tac * Tcr
+                Mat Twr = new Mat(4, 4, CV_64F);
+                Mat Twc = new Mat(4, 4, CV_64F);
+                Mat Twl = new Mat(4, 4, CV_64F);
+
+                Core.gemm(Twa, Tac, 1, new Mat(), 0, Twc, 0);
+                Core.gemm(Twc, Tcr, 1, new Mat(), 0, Twr, 0);
+                Core.gemm(Twr, Trl, 1, new Mat(), 0, Twl, 0);
+
+                Log.d(TAG, "TRANSFORMATION MATRIX ISS-Camera");
+                Log.d(TAG, Twc.dump());
+
+                Log.d(TAG, "TRANSFORMATION MATRIX ISS-AR Tag");
+                Log.d(TAG, Twr.dump());
+
+                Log.d(TAG, "TRANSFORMATION MATRIX ISS-AR Tag");
+                Log.d(TAG, Twl.dump());
+
+                double targetX = Twl.get(0, 3)[0];
+                double targetZ = Twl.get(2, 3)[0];
+
+                targetX -= 0.0572;
+                targetZ += 0.1111;
+
+                moveToWrapper(targetX, posY, targetZ,0, 0, 0.707, -0.707);
                 api.laserControl(true);
 
             }
-
-
-            /* quaternion orientation restriction
-
-            -phi < z < 0
-            -phi/2 < y < phi/2
-            -phi < x x < phi
-
-             quaternion to euler angle sequence
-             z -> y -> x
-             */
-
-            //move to target p3 for lasering (with plan B)
-            double qr_pos_y = -9.58091874748;
-
 
             api.laserControl(true);
         }
@@ -363,11 +547,169 @@ public class YourService extends KiboRpcService {
 
     @Override
     protected void runPlan3() {
-        moveToWrapper(11, -5.60, 4.32,
-                0.500, 0.500, -0.500, 0.500);
-        moveToWrapper(11.37, -5.70, 4.5, 0, 0, 0, 1);
 
-        moveToWrapper(11, -6, 5.45,  0.707, 0,  0.707, 0);
+
+        api.judgeSendStart();
+        initCamera(Param.SIMULATION);
+
+        map1 = new Mat();
+        map2 = new Mat();
+        initUndistortRectifyMap(camMatrix, distCoeff, new Mat(), camMatrix, new Size(1280,960), CV_16SC2, map1, map2 );
+
+        Mat img = imread(Environment.getExternalStorageDirectory().getAbsolutePath() +"/hanif2/" + "frame0450.jpg");
+        List<Mat> offsetAR = decodeAR();
+
+        if (offsetAR != null) {
+            double[] TrlElements = {
+                    /*
+                    P = [x, y, z];  P is the 20 cm offset between AR and Laser target
+
+                    Tac =
+                    [ rotMal, P ]
+                    [    0  , 1 ]
+
+                    rotMal is the 0 rotation -> object on the same plane
+                     */
+
+                    1.0000000,  0.0000000,  0.0000000, 0.1414213,
+                    0.0000000,  1.0000000,  0.0000000, -0.1414213,
+                    0.0000000,  0.0000000,  1.0000000, 0.0000000,
+                    0.0000000,  0.0000000,  0.0000000, 1.0000000
+
+            };
+            Mat Trl = new Mat(4, 4, CV_64F);
+            Trl.put(0, 0, TrlElements);
+
+            Mat rvec = offsetAR.get(0);
+            Mat tvec = offsetAR.get(1);
+
+            Log.d(TAG, "rvec" + rvec.dump());
+            Log.d(TAG, "tvec" + tvec.dump());
+
+            Mat rotMcr = new Mat(3, 3, CV_64F);
+
+            //Converting rotation vector to rotation matrix, AR tag orientation
+            Calib3d.Rodrigues(rvec, rotMcr);
+            Log.d(TAG, "ROTATION MATRIX CAMERA-AR");
+            Log.d(TAG, rotMcr.dump());
+
+            Mat Tcr = new Mat(4, 4, CV_64F);
+
+            //Building AR transformation matrix w.r.t AR tag
+            double[] TcrElements = {
+                    /*
+                    P = [x, y, z];  P is the AR tag translation vector
+
+                    Tac =
+                    [ rotMcr, P ]
+                    [    0  , 1 ]
+                     */
+
+                    rotMcr.get(0,0)[0], rotMcr.get(0,1)[0], rotMcr.get(0,2)[0], tvec.get(0, 0)[0],
+                    rotMcr.get(1,0)[0], rotMcr.get(1,1)[0], rotMcr.get(1,2)[0], tvec.get(0, 0)[1],
+                    rotMcr.get(2,0)[0], rotMcr.get(2,1)[0], rotMcr.get(2,2)[0], tvec.get(0, 0)[2],
+                    0.00000, 0.00000, 0.00000, 1.00000
+            };
+
+            Tcr.put(0,0, TcrElements);
+
+            Log.d(TAG, "TRANSFORMATION MATRIX CAMERA-AR");
+            Log.d(TAG, Tcr.dump());
+
+            //Building robot transformation matrix w.r.t camera
+            double[] TacElements = {
+                    /*
+                    P = [x, y, z];  P is the astrobee camera offset
+
+                    Tac =
+                    [ rotMac, P ]
+                    [   0   , 1 ]
+                     */
+
+                    0.0000000,  0.0000000,  1.000000, 0.1177,
+                    1.0000000,  0.0000000,  0.0000000, -0.0422,
+                    0.0000000,  1.0000000,  0.0000000, -0.0826,
+                    0.0000000,  0.0000000,  0.0000000, 1.0000
+
+            };
+
+            Mat Tac = new Mat(4, 4, CV_64F);
+            Tac.put(0, 0, TacElements);
+
+            //Calculating rotation matrix of astrobee w.r.t ISS
+
+            double posX = 10.52938314321329;
+            double posY = -9.45293840397371;
+            double posZ = 4.993802269474;
+
+            float quaX = -0.6849197f;
+            float quaY = 0.000014f;
+            float quaZ = -0.6849197f;
+            float quaW = 0.72858155f;
+
+            Log.d(TAG, "CURRENT POSITION OF ASTROBEE");
+            Log.d(TAG, quaX + " " + quaY + " " + quaZ + " " + quaW);
+            Log.d(TAG, posX + " " + posY + " " + posZ);
+
+            Quaternion quaternion = new Quaternion(quaX, quaY, quaZ, quaW);
+            Mat rotMwa = quatToMatrix2(quaternion);
+
+            Log.d(TAG, "ROTATION MATRIX ISS-ASTROBEE");
+            Log.d(TAG, rotMwa.dump());
+
+            double det = Core.determinant(rotMwa);
+            Log.d(TAG, "DETERMINANT = " + det);
+
+            //Building transformation matrix ISS-ASTROBEE
+            double[] TwaElements = {
+                    /*
+                    P = [x, y, z];  P is the astrobee global position (w.r.t ISS)
+
+                    Tac =
+                    [ rotMwa, P ]
+                    [   0   , 1 ]
+                     */
+
+                    rotMwa.get(0,0)[0], rotMwa.get(0,1)[0], rotMwa.get(0,2)[0], posX,
+                    rotMwa.get(1,0)[0], rotMwa.get(1,1)[0], rotMwa.get(1,2)[0], posY,
+                    rotMwa.get(2,0)[0], rotMwa.get(2,1)[0], rotMwa.get(2,2)[0], posZ,
+                    0.00000, 0.00000, 0.00000, 1.00000
+            };
+
+            Mat Twa = new Mat(4, 4, CV_64F);
+            Twa.put(0, 0, TwaElements);
+
+            Log.d(TAG, "TRANSFORMATION MATRIX ISS-ASTROBEE");
+            Log.d(TAG, Twa.dump());
+
+            //Calculating Twr = Twa * Tac * Tcr
+            Mat Twr = new Mat(4, 4, CV_64F);
+            Mat Twc = new Mat(4, 4, CV_64F);
+            Mat Twl = new Mat(4, 4, CV_64F);
+
+            Core.gemm(Twa, Tac, 1, new Mat(), 0, Twc, 0);
+            Core.gemm(Twc, Tcr, 1, new Mat(), 0, Twr, 0);
+            Core.gemm(Twr, Trl, 1, new Mat(), 0, Twl, 0);
+
+            Log.d(TAG, "TRANSFORMATION MATRIX ISS-AR Tag");
+            Log.d(TAG, Twr.dump());
+
+            Log.d(TAG, "TRANSFORMATION MATRIX ISS-Laser Tag");
+            Log.d(TAG, Twl.dump());
+
+            double targetX = Twl.get(0, 3)[0];
+            double targetZ = Twl.get(2, 3)[0];
+
+            targetX -= 0.0572;
+            targetZ += 0.1111;
+
+            moveToWrapper(targetX, posY, targetZ,0, 0, 0.707, -0.707);
+
+            api.laserControl(true);
+
+            api.judgeSendFinishSimulation();
+
+        }
     }
 
 
@@ -375,7 +717,7 @@ public class YourService extends KiboRpcService {
                                   double qua_x, double qua_y, double qua_z,
                                   double qua_w) {
 
-        final int LOOP_MAX = 100;
+        final int LOOP_MAX = 50;
         final Point point = new Point(pos_x, pos_y, pos_z);
         final Quaternion quaternion = new Quaternion((float) qua_x, (float) qua_y,
                 (float) qua_z, (float) qua_w);
@@ -446,7 +788,6 @@ public class YourService extends KiboRpcService {
 
         for (Mat QR : QRBuffer){
 
-
             boolean success = decodeQR(targetQR, QR, 1280, 960, Image.UNDISTORT, "1280x960", reader);
 
             if (success){
@@ -457,7 +798,7 @@ public class YourService extends KiboRpcService {
 
         }
 
-        int MAX_RETRY_TIMES = 10;
+        int MAX_RETRY_TIMES = 25;
         int retryTimes = 1;
 
         while (retryTimes <= MAX_RETRY_TIMES) {
@@ -573,16 +914,15 @@ public class YourService extends KiboRpcService {
         Mat rvec = new Mat();
         Mat tvec = new Mat();
 
-        Mat nav_cam = api.getMatNavCam();
-        //Mat dst = undistort_camera(nav_cam);
-
         DetectorParameters parameters = DetectorParameters.create();
-        parameters.set_minDistanceToBorder(0);
-        parameters.set_minMarkerPerimeterRate(0.01);
-        parameters.set_maxMarkerPerimeterRate(4);
-        parameters.set_polygonalApproxAccuracyRate(0.08);
 
-        for (int i = 0; i < 10 && markerIds.cols() == 0 && markerIds.rows() == 0; i++){
+        for (int i = 0; i < 100 && markerIds.cols() == 0 && markerIds.rows() == 0; i++){
+
+            Mat nav_cam = api.getMatNavCam();
+            /*
+            Mat tmp = nav_cam.clone();
+            remap(tmp, nav_cam, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
+             */
 
             Aruco.detectMarkers(nav_cam/*dst*/, dictionary, corners, markerIds, parameters, rejected, camMatrix, distCoeff );
 
@@ -608,8 +948,8 @@ public class YourService extends KiboRpcService {
                 List<Mat> transform = new ArrayList<Mat>();
                 transform.add(rvec);
                 transform.add(tvec);
-                return transform;
 
+                return transform;
 
             }
 
@@ -693,7 +1033,32 @@ public class YourService extends KiboRpcService {
         };
 
         rotM.put(0, 0, rotMElements);
+
         return rotM;
+
+    }
+
+    private void scanSDImages(){
+
+        File filePath = new File(Environment.getExternalStorageDirectory().getAbsolutePath() +"/hanif/");
+
+        File[] listingAllFiles = filePath.listFiles();
+        List<File> allJpg = imageFileUtils.iterateOverFiles(listingAllFiles);
+
+        for (File file : allJpg) {
+            String fileAbsPath = file.getAbsolutePath();
+            String absPath2 = Environment.getExternalStorageDirectory().getAbsolutePath();
+
+            Log.d(TAG, fileAbsPath);
+            Log.d(TAG, absPath2);
+
+            Mat img = imread(fileAbsPath);
+
+            QRCodeReader reader = new QRCodeReader();
+            decodeQR(0, img, 1280, 960, Image.DISTORT, "SCAN_RES", reader);
+            //decodeWithZbar(0, img);
+
+        }
 
     }
 

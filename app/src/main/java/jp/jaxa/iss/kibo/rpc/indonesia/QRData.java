@@ -9,9 +9,6 @@ public class QRData {
     private static String quaY;
     private static String quaZ;
 
-    private static Double radX;
-    private static Double radY;
-    private static Double radZ;
     static String Ar_Id;
 
     static void storePosition(String recData){
@@ -65,19 +62,13 @@ public class QRData {
         return Float.parseFloat(quaZ);
     }
 
-    static double getRadX(){ return radX; }
-
-    static double getRadY(){ return radX; }
-
-    static double getRadZ(){ return radX; }
-
     static double getQuaW(){
 
         if(QuaternionIsAvailable()){
 
-            return 1.0 - Math.pow(Double.parseDouble(quaX), 2.0)
-                    - Math.pow(Double.parseDouble(quaY), 2.0)
-                    - Math.pow(Double.parseDouble(quaZ), 2.0);
+            return Math.sqrt( 1.0 - Math.pow(Double.parseDouble(quaX), 2.0)
+                                  - Math.pow(Double.parseDouble(quaY), 2.0)
+                                  - Math.pow(Double.parseDouble(quaZ), 2.0) );
 
         } else {
 
