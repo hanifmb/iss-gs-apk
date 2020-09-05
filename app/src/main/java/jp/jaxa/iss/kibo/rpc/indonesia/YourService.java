@@ -158,6 +158,7 @@ public class YourService extends KiboRpcService {
         scanBuffer(0);
 
         api.flashlightControlFront(0);
+
         moveToWrapper(10.7, -5.95, 4.42, 0, 0, 0.707, -0.707);
         moveToWrapper(10.455, -6.54, 4.42, 0, 0, 0.707, -0.707);
         moveToWrapper(11.06, -7.68, 5.47, 0.5, 0.5 ,0.5, -0.5);
@@ -179,12 +180,6 @@ public class YourService extends KiboRpcService {
 
         if(QRData.PositionIsAvailable() && QRData.QuaternionIsAvailable()){
 
-            /*
-
-            moveToWrapper(QRData.getPosX(), QRData.getPosY(), QRData.getPosZ(),
-                    0, 0, 0.707, -0.707);
-
-             */
 
             moveToWrapper(QRData.getPosX(), QRData.getPosY(), QRData.getPosZ(),
                     QRData.getQuaX(), QRData.getQuaY(), QRData.getQuaZ(), QRData.getQuaW());
@@ -211,7 +206,9 @@ public class YourService extends KiboRpcService {
         if (offsetAR != null) {
             double[] TrlElements = {
                     /*
-                    P = [x, y, z];  P is the 20 cm offset between AR and Laser target
+                    P = [x,
+                         y,
+                         z];  P is the 20 cm offset between AR and Laser target
 
                     Tac =
                     [ rotMal, P ]
@@ -220,7 +217,7 @@ public class YourService extends KiboRpcService {
                     rotMal is the 0 rotation -> object on the same plane
                      */
 
-                    1.0000000,  0.0000000,  0.0000000, 0.1414213,
+                    1.0000000,  0.0000000,  0.0000000, -0.1414213,
                     0.0000000,  1.0000000,  0.0000000, -0.1414213,
                     0.0000000,  0.0000000,  1.0000000, 0.0000000,
                     0.0000000,  0.0000000,  0.0000000, 1.0000000
@@ -244,10 +241,12 @@ public class YourService extends KiboRpcService {
 
             Mat Tcr = new Mat(4, 4, CV_64F);
 
-            //Building AR transformation matrix w.r.t AR tag
+            //Building AR transformation matrix w.r.t navigation cam
             double[] TcrElements = {
                     /*
-                    P = [x, y, z];  P is the AR tag translation vector
+                    P = [x,
+                         y,
+                         z];  P is the AR tag translation vector
 
                     Tac =
                     [ rotMcr, P ]
@@ -265,10 +264,12 @@ public class YourService extends KiboRpcService {
             Log.d(TAG, "TRANSFORMATION MATRIX CAMERA-AR");
             Log.d(TAG, Tcr.dump());
 
-            //Building robot transformation matrix w.r.t camera
+            //Building camera transformation matrix w.r.t astrobee
             double[] TacElements = {
                     /*
-                    P = [x, y, z];  P is the astrobee camera offset
+                    P = [x,
+                         y,
+                         z];  P is the astrobee camera offset
 
                     Tac =
                     [ rotMac, P ]
@@ -311,10 +312,12 @@ public class YourService extends KiboRpcService {
                 double det = Core.determinant(rotMwa);
                 Log.d(TAG, "DETERMINANT = " + det);
 
-                //Building transformation matrix ISS-ASTROBEE
+                //Building transformation matrix ISS w.r.t ASTROBEE
                 double[] TwaElements = {
                         /*
-                        P = [x, y, z];  P is the astrobee global position (w.r.t ISS)
+                        P = [x,
+                             y,
+                             z];  P is the astrobee global position (w.r.t ISS)
 
                         Tac =
                         [ rotMwa, P ]
