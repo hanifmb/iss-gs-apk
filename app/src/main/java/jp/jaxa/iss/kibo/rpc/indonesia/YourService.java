@@ -168,7 +168,7 @@ public class YourService extends KiboRpcService {
         moveToWrapper(10.455, -6.54, 4.42, 0, 0, 0.707, -0.707);
 
         //moveToWrapper(11.06-offsetCamY_bodyFrame, -7.68-offsetCamZ_bodyFrame, 5.47, 0.5, 0.5 ,0.5, -0.5);
-        moveToWrapper(11.06, -7.68, 5.47, -0.5, -0.5 ,-0.5, 0.5);
+        moveToWrapper(11.06, -7.68, 5.47, 0.5, 0.5 ,0.5, -0.5);
 
         api.flashlightControlFront(0.025f);
 
