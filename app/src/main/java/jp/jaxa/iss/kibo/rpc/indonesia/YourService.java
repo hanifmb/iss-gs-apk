@@ -168,7 +168,7 @@ public class YourService extends KiboRpcService {
         moveToWrapper(10.455, -6.54, 4.42, 0, 0, 0.707, -0.707);
 
         //moveToWrapper(11.06-offsetCamY_bodyFrame, -7.68-offsetCamZ_bodyFrame, 5.47, 0.5, 0.5 ,0.5, -0.5);
-        moveToWrapper(11.06, -7.68, 5.40, -0.5, -0.5 ,-0.5, 0.5);
+        moveToWrapper(11.06, -7.68, 5.47, -0.5, -0.5 ,-0.5, 0.5);
 
         api.flashlightControlFront(0.025f);
 
@@ -595,15 +595,6 @@ public class YourService extends KiboRpcService {
 
         Result result = api.moveTo(point, quaternion, true);
 
-        if(result == null || result.getMessage().equals("Move goal failed with response: Unable to plan a segment")
-                          || result.getMessage().equals("Move goal failed with response: Keep in Zone Violation"))
-        {
-
-            Log.i(TAG, "Returning false");
-            return false;
-
-        }
-
         long end = System.currentTimeMillis();
         long elapsedTime = end - start;
         Log.i(TAG, "[0] moveTo finished in : " + elapsedTime/1000 + "seconds");
@@ -651,7 +642,15 @@ public class YourService extends KiboRpcService {
             }else{
 
                 while(navCam == QRBuffer.get(i-1)){
+
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+
                     navCam = getNavcamMat();
+
                 }
 
                 QRBuffer.add(navCam);
@@ -676,7 +675,7 @@ public class YourService extends KiboRpcService {
 
         }
 
-        int MAX_RETRY_TIMES = 30;
+        int MAX_RETRY_TIMES = 240;
         int retryTimes = 1;
 
         while (retryTimes <= MAX_RETRY_TIMES) {
@@ -794,7 +793,7 @@ public class YourService extends KiboRpcService {
 
         DetectorParameters parameters = DetectorParameters.create();
 
-        for (int i = 0; i < 50; i++){
+        for (int i = 0; i < 240; i++){
 
             Mat nav_cam = getNavcamMat();
             /*
@@ -922,19 +921,25 @@ public class YourService extends KiboRpcService {
 
         while (image == null) {
 
-           image = api.getMatNavCam();
-
             try {
                 Thread.sleep(300);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
 
+            image = api.getMatNavCam();
+
         }
 
         return image;
 
     }
+
+    /*
+
+    for real world image testing purpose
+
+     */
 
     private void scanSDImages(){
 
