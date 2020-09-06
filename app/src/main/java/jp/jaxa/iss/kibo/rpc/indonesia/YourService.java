@@ -642,7 +642,7 @@ public class YourService extends KiboRpcService {
             }else{
 
                 int counter = 0;
-                while(navCam == QRBuffer.get(i-1) && counter < 10){
+                while(navCam == QRBuffer.get(i-1) && counter < 5){
 
                     try {
                         Thread.sleep(100);
@@ -923,7 +923,7 @@ public class YourService extends KiboRpcService {
         Mat image = api.getMatNavCam();
 
         int counter = 0;
-        while (image == null && counter <10) {
+        while (image == null && counter <5) {
 
             try {
                 Thread.sleep(300);
