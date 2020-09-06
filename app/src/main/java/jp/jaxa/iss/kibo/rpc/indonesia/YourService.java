@@ -144,9 +144,6 @@ public class YourService extends KiboRpcService {
         //moveToWrapper(11, -4.90, 4.33, 0.500, 0.500, -0.500, 0.500);
         //moveToWrapper(11, -5.60, 4.33, 0.500, 0.500, -0.500, 0.500);
 
-        double offsetCamZ_bodyFrame = -0.0826;
-        double offsetCamY_bodyFrame= -0.0422;
-
         moveToWrapper(11.29, -4.70, 4.95, 0, 0, -0.258819, 0.9659258);
 
         //moveToWrapper(10.7, -5.16+offsetCamY_bodyFrame, 4.42-offsetCamZ_bodyFrame, 0, 0 ,1, 0);
