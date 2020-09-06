@@ -144,7 +144,12 @@ public class YourService extends KiboRpcService {
         //moveToWrapper(11, -4.90, 4.33, 0.500, 0.500, -0.500, 0.500);
         //moveToWrapper(11, -5.60, 4.33, 0.500, 0.500, -0.500, 0.500);
 
-        moveToWrapper(11.3, -4.5, 4.95, 0, 0, 0.707, -0.707);
+        double offsetCamZ_bodyFrame = -0.0826;
+        double offsetCamY_bodyFrame= -0.0422;
+
+        moveToWrapper(11.29, -4.70, 4.95, 0, 0, -0.258819, 0.9659258);
+
+        //moveToWrapper(10.7, -5.16+offsetCamY_bodyFrame, 4.42-offsetCamZ_bodyFrame, 0, 0 ,1, 0);
         moveToWrapper(10.7, -5.16, 4.42, 0, 0 ,1, 0);
 
 
@@ -161,7 +166,9 @@ public class YourService extends KiboRpcService {
 
         moveToWrapper(10.7, -5.95, 4.42, 0, 0, 0.707, -0.707);
         moveToWrapper(10.455, -6.54, 4.42, 0, 0, 0.707, -0.707);
-        moveToWrapper(11.06, -7.68, 5.47, 0.5, 0.5 ,0.5, -0.5);
+
+        //moveToWrapper(11.06-offsetCamY_bodyFrame, -7.68-offsetCamZ_bodyFrame, 5.47, 0.5, 0.5 ,0.5, -0.5);
+        moveToWrapper(11.06, -7.68, 5.40, -0.5, -0.5 ,-0.5, 0.5);
 
         api.flashlightControlFront(0.025f);
 
@@ -175,7 +182,7 @@ public class YourService extends KiboRpcService {
 
         api.flashlightControlFront(0);
 
-        moveToWrapper(11.2, -7.78, 4.85, 0, 0, 0.707, -0.707);
+        moveToWrapper(11.06, -7.78, 4.85, 0, 0, 0.707, -0.707);
         moveToWrapper(11.2, -9, 4.85, 0, 0, 0.707, -0.707);
 
         if(QRData.PositionIsAvailable() && QRData.QuaternionIsAvailable()){
@@ -371,11 +378,14 @@ public class YourService extends KiboRpcService {
             double targetX = Twr.get(0, 3)[0];
             double targetZ = Twr.get(2, 3)[0];
 
-            targetX -= 0.0572;
-            targetZ += 0.1111;
-
             targetX += 0.1414;
             targetZ += 0.1414;
+
+            Log.d(TAG, "Laser based on world offset");
+            Log.d(TAG, targetX + " " + targetZ);
+
+            targetX -= 0.0572;
+            targetZ += 0.1111;
 
             moveToWrapper(targetX, posY, targetZ,0, 0, 0.707, -0.707);
 
@@ -389,177 +399,16 @@ public class YourService extends KiboRpcService {
 
     @Override
     protected void runPlan2() {
-        /*
-        Tal = Laser target transformation matrix w.r.t AR Tag
-        Tcr = AR Tag transformation matrix w.r.t camera
-        Tac = Camera transformation matrix w.r.t astrobee
-        Twa = Astrobee transformation matrix w.r.t ISS(world)
 
-        Twr = AR Tag transformation matrix w.r.t ISS
-        Twl = Laser target transformation matrix w.r.t ISS
-
-        Twl = Twa * Tac * Tcr * Tal
-         */
-
-        api.judgeSendStart();
         initCamera(Param.SIMULATION);
 
-        List<Mat> offsetAR = decodeAR();
+        map1 = new Mat();
+        map2 = new Mat();
+        initUndistortRectifyMap(camMatrix, distCoeff, new Mat(), camMatrix, new Size(1280,960), CV_16SC2, map1, map2 );
 
-        if (offsetAR != null) {
-            double[] TrlElements = {
-                    /*
-                    P = [x, y, z];  P is the 20 cm offset between AR and Laser target
+        scanARImages();
 
-                    Tac =
-                    [ rotMal, P ]
-                    [    0  , 1 ]
 
-                    rotMal is the 0 rotation -> object on the same plane
-                     */
-
-                    1.0000000,  0.0000000,  0.0000000, 0.1414213,
-                    0.0000000,  1.0000000,  0.0000000, -0.1414213,
-                    0.0000000,  0.0000000,  1.0000000, 0.0000000,
-                    0.0000000,  0.0000000,  0.0000000, 1.0000000
-
-            };
-            Mat Trl = new Mat(4, 4, CV_64F);
-            Trl.put(0, 0, TrlElements);
-
-            Mat rvec = offsetAR.get(0);
-            Mat tvec = offsetAR.get(1);
-
-            Log.d(TAG, "rvec" + rvec.dump());
-            Log.d(TAG, "tvec" + tvec.dump());
-
-            Mat rotMcr = new Mat(3, 3, CV_64F);
-
-            //Converting rotation vector to rotation matrix, AR tag orientation
-            Calib3d.Rodrigues(rvec, rotMcr);
-            Log.d(TAG, "ROTATION MATRIX CAMERA-AR");
-            Log.d(TAG, rotMcr.dump());
-
-            Mat Tcr = new Mat(4, 4, CV_64F);
-
-            //Building AR transformation matrix w.r.t AR tag
-            double[] TcrElements = {
-                    /*
-                    P = [x, y, z];  P is the AR tag translation vector
-
-                    Tac =
-                    [ rotMcr, P ]
-                    [    0  , 1 ]
-                     */
-
-                    rotMcr.get(0,0)[0], rotMcr.get(0,1)[0], rotMcr.get(0,2)[0], tvec.get(0, 0)[0],
-                    rotMcr.get(1,0)[0], rotMcr.get(1,1)[0], rotMcr.get(1,2)[0], tvec.get(0, 0)[1],
-                    rotMcr.get(2,0)[0], rotMcr.get(2,1)[0], rotMcr.get(2,2)[0], tvec.get(0, 0)[2],
-                    0.00000, 0.00000, 0.00000, 1.00000
-            };
-
-            Tcr.put(0,0, TcrElements);
-
-            Log.d(TAG, "TRANSFORMATION MATRIX CAMERA-AR");
-            Log.d(TAG, Tcr.dump());
-
-            //Building robot transformation matrix w.r.t camera
-            double[] TacElements = {
-                    /*
-                    P = [x,
-                         y,
-                         z];  P is the astrobee camera offset
-
-                    Tac =
-                    [ rotMac, P ]
-                    [   0   , 1 ]
-                     */
-
-                    0.0000000,  0.0000000,  1.000000, 0.1177,
-                    1.0000000,  0.0000000,  0.0000000, -0.0422,
-                    0.0000000,  1.0000000,  0.0000000, -0.0826,
-                    0.0000000,  0.0000000,  0.0000000, 1.0000
-
-            };
-
-            Mat Tac = new Mat(4, 4, CV_64F);
-            Tac.put(0, 0, TacElements);
-
-            //Calculating rotation matrix of astrobee w.r.t ISS
-            Kinematics kinematics = api.getTrustedRobotKinematics();
-
-            if(kinematics.getConfidence() == Kinematics.Confidence.GOOD){
-                double posX = kinematics.getPosition().getX();
-                double posY = kinematics.getPosition().getY();
-                double posZ = kinematics.getPosition().getZ();
-
-                float quaX = kinematics.getOrientation().getX();
-                float quaY = kinematics.getOrientation().getY();
-                float quaZ = kinematics.getOrientation().getZ();
-                float quaW = kinematics.getOrientation().getW();
-
-                Quaternion quaternion = new Quaternion(quaX, quaY, quaZ, quaW);
-                Mat rotMwa = quatToMatrix2(quaternion);
-
-                Log.d(TAG, "ROTATION MATRIX ISS-ASTROBEE");
-                Log.d(TAG, rotMwa.dump());
-
-                double det = Core.determinant(rotMwa);
-                Log.d(TAG, "DETERMINANT = " + det);
-
-                //Building transformation matrix ISS-ASTROBEE
-                double[] TwaElements = {
-                        /*
-                        P = [x, y, z];  P is the astrobee global position (w.r.t ISS)
-
-                        Tac =
-                        [ rotMwa, P ]
-                        [   0   , 1 ]
-                         */
-
-                        rotMwa.get(0,0)[0], rotMwa.get(0,1)[0], rotMwa.get(0,2)[0], posX,
-                        rotMwa.get(1,0)[0], rotMwa.get(1,1)[0], rotMwa.get(1,2)[0], posY,
-                        rotMwa.get(2,0)[0], rotMwa.get(2,1)[0], rotMwa.get(2,2)[0], posZ,
-                        0.00000, 0.00000, 0.00000, 1.00000
-                };
-
-                Mat Twa = new Mat(4, 4, CV_64F);
-                Twa.put(0, 0, TwaElements);
-
-                Log.d(TAG, "TRANSFORMATION MATRIX ISS-ASTROBEE");
-                Log.d(TAG, Twa.dump());
-
-                //Calculating Twr = Twa * Tac * Tcr
-                Mat Twr = new Mat(4, 4, CV_64F);
-                Mat Twc = new Mat(4, 4, CV_64F);
-                Mat Twl = new Mat(4, 4, CV_64F);
-
-                Core.gemm(Twa, Tac, 1, new Mat(), 0, Twc, 0);
-                Core.gemm(Twc, Tcr, 1, new Mat(), 0, Twr, 0);
-                Core.gemm(Twr, Trl, 1, new Mat(), 0, Twl, 0);
-
-                Log.d(TAG, "TRANSFORMATION MATRIX ISS-Camera");
-                Log.d(TAG, Twc.dump());
-
-                Log.d(TAG, "TRANSFORMATION MATRIX ISS-AR Tag");
-                Log.d(TAG, Twr.dump());
-
-                Log.d(TAG, "TRANSFORMATION MATRIX ISS-AR Tag");
-                Log.d(TAG, Twl.dump());
-
-                double targetX = Twl.get(0, 3)[0];
-                double targetZ = Twl.get(2, 3)[0];
-
-                targetX -= 0.0572;
-                targetZ += 0.1111;
-
-                moveToWrapper(targetX, posY, targetZ,0, 0, 0.707, -0.707);
-                api.laserControl(true);
-
-            }
-
-            api.laserControl(true);
-        }
     }
 
     @Override
@@ -730,7 +579,7 @@ public class YourService extends KiboRpcService {
     }
 
 
-    private void moveToWrapper(double pos_x, double pos_y, double pos_z,
+    private Boolean moveToWrapper(double pos_x, double pos_y, double pos_z,
                                   double qua_x, double qua_y, double qua_z,
                                   double qua_w) {
 
@@ -741,10 +590,19 @@ public class YourService extends KiboRpcService {
 
 
         Log.i(TAG, "[0] Calling moveTo function ");
+        Log.i(TAG, pos_x + " " + pos_y + " " + pos_z);
         long start = System.currentTimeMillis();
 
         Result result = api.moveTo(point, quaternion, true);
-        
+
+        if(result == null || result.getMessage().equals("Move goal failed with response: Unable to plan a segment")
+                          || result.getMessage().equals("Move goal failed with response: Keep in Zone Violation"))
+        {
+
+            Log.i(TAG, "Returning false");
+            return false;
+
+        }
 
         long end = System.currentTimeMillis();
         long elapsedTime = end - start;
@@ -772,6 +630,8 @@ public class YourService extends KiboRpcService {
 
         }
 
+        return true;
+
     }
 
 
@@ -782,7 +642,7 @@ public class YourService extends KiboRpcService {
 
         for(int i = 0; i< 5; i ++){
 
-            Mat navCam = api.getMatNavCam();
+            Mat navCam = getNavcamMat();
 
             if(i == 0){
 
@@ -791,7 +651,7 @@ public class YourService extends KiboRpcService {
             }else{
 
                 while(navCam == QRBuffer.get(i-1)){
-                    navCam = api.getMatNavCam();
+                    navCam = getNavcamMat();
                 }
 
                 QRBuffer.add(navCam);
@@ -816,12 +676,12 @@ public class YourService extends KiboRpcService {
 
         }
 
-        int MAX_RETRY_TIMES = 25;
+        int MAX_RETRY_TIMES = 30;
         int retryTimes = 1;
 
         while (retryTimes <= MAX_RETRY_TIMES) {
 
-            Mat QR = api.getMatNavCam();
+            Mat QR = getNavcamMat();
 
             boolean success = decodeQR(targetQR, QR, 1280, 960, Image.UNDISTORT, "1280x960", reader);
 
@@ -934,9 +794,9 @@ public class YourService extends KiboRpcService {
 
         DetectorParameters parameters = DetectorParameters.create();
 
-        for (int i = 0; i < 100 && markerIds.cols() == 0 && markerIds.rows() == 0; i++){
+        for (int i = 0; i < 50; i++){
 
-            Mat nav_cam = api.getMatNavCam();
+            Mat nav_cam = getNavcamMat();
             /*
             Mat tmp = nav_cam.clone();
             remap(tmp, nav_cam, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
@@ -1056,9 +916,29 @@ public class YourService extends KiboRpcService {
 
     }
 
+    private Mat getNavcamMat(){
+
+        Mat image = api.getMatNavCam();
+
+        while (image == null) {
+
+           image = api.getMatNavCam();
+
+            try {
+                Thread.sleep(300);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+        }
+
+        return image;
+
+    }
+
     private void scanSDImages(){
 
-        File filePath = new File(Environment.getExternalStorageDirectory().getAbsolutePath() +"/hanif/");
+        File filePath = new File(Environment.getExternalStorageDirectory().getAbsolutePath() +"/100QR/");
 
         File[] listingAllFiles = filePath.listFiles();
         List<File> allJpg = imageFileUtils.iterateOverFiles(listingAllFiles);
@@ -1080,6 +960,79 @@ public class YourService extends KiboRpcService {
 
     }
 
+    private void scanARImages(){
+
+        File filePath = new File(Environment.getExternalStorageDirectory().getAbsolutePath() +"/100AR/");
+
+        File[] listingAllFiles = filePath.listFiles();
+        List<File> allJpg = imageFileUtils.iterateOverFiles(listingAllFiles);
+
+        for (File file : allJpg) {
+            String fileAbsPath = file.getAbsolutePath();
+            String absPath2 = Environment.getExternalStorageDirectory().getAbsolutePath();
+
+            Log.d(TAG, fileAbsPath);
+            Log.d(TAG, absPath2);
+
+            Mat img = imread(fileAbsPath);
+
+            decodeAR2(img);
+
+            //decodeWithZbar(0, img);
+
+        }
+
+    }
+
+    private List<Mat> decodeAR2(Mat nav_cam){
+
+        Mat markerIds = new Mat();
+        List<Mat> corners= new ArrayList<>();
+        List<Mat> rejected= new ArrayList<>();
+        Dictionary dictionary = Aruco.getPredefinedDictionary(Aruco.DICT_5X5_250);
+
+        Mat rvec = new Mat();
+        Mat tvec = new Mat();
+
+        DetectorParameters parameters = DetectorParameters.create();
+
+            /*
+            Mat tmp = nav_cam.clone();
+            remap(tmp, nav_cam, map1, map2, INTER_LINEAR, BORDER_CONSTANT);
+             */
+
+        Aruco.detectMarkers(nav_cam/*dst*/, dictionary, corners, markerIds, parameters, rejected, camMatrix, distCoeff );
+
+        if(markerIds.cols() != 0 && markerIds.rows() != 0){
+
+            //Converting AR value from double to string
+            double ARDouble = markerIds.get(0, 0)[0];
+            int ARint = (int) ARDouble;
+            QRData.Ar_Id = Integer.toString(ARint);
+
+            Log.i(TAG, "AR Found : " + QRData.Ar_Id);
+            api.judgeSendDiscoveredAR(QRData.Ar_Id);
+
+            //Pose estimation
+            Aruco.estimatePoseSingleMarkers(corners, 0.05f, camMatrix, distCoeff, rvec, tvec);
+
+            /*
+            Log.i("Corners", Integer.toString(corners.size()));
+            Log.i("id", markerIds.dump());
+            Log.i("rejected", Integer.toString(rejected.size()));
+            */
+
+            List<Mat> transform = new ArrayList<Mat>();
+            transform.add(rvec);
+            transform.add(tvec);
+
+            return transform;
+
+        }
+
+        Log.i(TAG, "AR NOT FOUND");
+        return null;
+    }
 
 }
 
