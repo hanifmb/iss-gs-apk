@@ -138,16 +138,11 @@ public class YourService extends KiboRpcService {
 
         api.judgeSendStart();
 
-        initCamera(Param.ORBIT);
-        //initCamera(Param.SIMULATION);
-
-        //moveToWrapper(11, -4.90, 4.33, 0.500, 0.500, -0.500, 0.500);
-        //moveToWrapper(11, -5.60, 4.33, 0.500, 0.500, -0.500, 0.500);
-
-        moveToWrapper(11.29, -4.70, 4.95, 0, 0, -0.258819, 0.9659258);
+        //initCamera(Param.ORBIT);
+        initCamera(Param.SIMULATION);
 
         //moveToWrapper(10.7, -5.16+offsetCamY_bodyFrame, 4.42-offsetCamZ_bodyFrame, 0, 0 ,1, 0);
-        moveToWrapper(10.7, -5.16, 4.42, 0, 0 ,1, 0);
+        moveToWrapper(10.7, -5.57, 4.5, 0, 0 ,1, 0);
 
 
         api.flashlightControlFront(0.025f);
@@ -165,7 +160,7 @@ public class YourService extends KiboRpcService {
         moveToWrapper(10.455, -6.54, 4.42, 0, 0, 0.707, -0.707);
 
         //moveToWrapper(11.06-offsetCamY_bodyFrame, -7.68-offsetCamZ_bodyFrame, 5.47, 0.5, 0.5 ,0.5, -0.5);
-        moveToWrapper(11.06, -7.68, 5.40, 0.5, 0.5 ,0.5, -0.5);
+        moveToWrapper(11.1, -7.98, 5.47, -0.5, -0.5 ,-0.5, 0.5);
 
         api.flashlightControlFront(0.025f);
 
@@ -190,7 +185,8 @@ public class YourService extends KiboRpcService {
 
 
         }else{
-            api.judgeSendFinishISS();
+            //api.judgeSendFinishISS();
+            api.judgeSendFinishSimulation();
         }
 
         /*
@@ -291,7 +287,7 @@ public class YourService extends KiboRpcService {
             Tac.put(0, 0, TacElements);
 
             //Calculating rotation matrix of astrobee w.r.t ISS
-            Kinematics kinematics = api.getTrustedRobotKinematics(60);
+            Kinematics kinematics = api.getTrustedRobotKinematics(5);
 
             double posX, posY, posZ;
             float quaX, quaY, quaZ, quaW;
@@ -389,8 +385,8 @@ public class YourService extends KiboRpcService {
             api.laserControl(true);
 
         }
-        api.judgeSendFinishISS();
-        //api.judgeSendFinishSimulation();
+        //api.judgeSendFinishISS();
+        api.judgeSendFinishSimulation();
     }
 
 
