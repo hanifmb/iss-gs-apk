@@ -174,7 +174,7 @@ public class YourService extends KiboRpcService {
 
         api.flashlightControlFront(0);
 
-        moveToWrapper(11.06, -7.78, 4.85, 0, 0, 0.707, -0.707);
+        moveToWrapper(11.1, -8.28, 4.85, 0, 0, 0.707, -0.707);
         moveToWrapper(11.2, -9, 4.85, 0, 0, 0.707, -0.707);
 
         if(QRData.PositionIsAvailable() && QRData.QuaternionIsAvailable()){
@@ -210,7 +210,7 @@ public class YourService extends KiboRpcService {
         }else{
 
             moveToWrapper(QRData.getPosX(), QRData.getPosY(), QRData.getPosZ(),
-                    0, 0, -0.707, 0.707);
+                    0, 0, 0.707, -0.707);
 
             offsetAR = decodeAR();
 
