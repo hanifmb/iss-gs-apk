@@ -138,8 +138,11 @@ public class YourService extends KiboRpcService {
 
         api.judgeSendStart();
 
-        //initCamera(Param.ORBIT);
-        initCamera(Param.SIMULATION);
+        initCamera(Param.ORBIT);
+        //initCamera(Param.SIMULATION);
+
+        Log.d(TAG, camMatrix.dump());
+        Log.d(TAG, distCoeff.dump());
 
         //moveToWrapper(10.7, -5.16+offsetCamY_bodyFrame, 4.42-offsetCamZ_bodyFrame, 0, 0 ,1, 0);
         moveToWrapper(10.7, -5.57, 4.5, 0, 0 ,1, 0);
@@ -160,7 +163,7 @@ public class YourService extends KiboRpcService {
         moveToWrapper(10.455, -6.54, 4.42, 0, 0, 0.707, -0.707);
 
         //moveToWrapper(11.06-offsetCamY_bodyFrame, -7.68-offsetCamZ_bodyFrame, 5.47, 0.5, 0.5 ,0.5, -0.5);
-        moveToWrapper(11.1, -7.98, 5.47, -0.5, -0.5 ,-0.5, 0.5);
+        moveToWrapper(11.1, -7.98, 5.40, -0.5, -0.5 ,-0.5, 0.5);
 
         api.flashlightControlFront(0.025f);
 
@@ -185,8 +188,8 @@ public class YourService extends KiboRpcService {
 
 
         }else{
-            //api.judgeSendFinishISS();
-            api.judgeSendFinishSimulation();
+            api.judgeSendFinishISS();
+            //api.judgeSendFinishSimulation();
         }
 
         /*
@@ -221,8 +224,9 @@ public class YourService extends KiboRpcService {
             }
 
         }
-        //api.judgeSendFinishISS();
-        api.judgeSendFinishSimulation();
+
+        api.judgeSendFinishISS();
+        //api.judgeSendFinishSimulation();
     }
 
 
