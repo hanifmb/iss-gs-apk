@@ -2,7 +2,11 @@
 
 ISS-GS-APK is a guest science program that was developed for the KIBO RPC's final round in the ISS. The program runs a mission that contains a predefined navigation route, a series of QR decoding, and a fiducial marker pose estimation. For comprehensive information on the mission, please refer to the [official Guidebook](https://humans-in-space.jaxa.jp/krpc/1st/download/index.html). Referring to 1.7.3 in the Guidebook, this program is set to the public only for educational purposes.
 
+The demonstration of this exact program being run on Astrobee can be found in the [recording](https://youtu.be/UhTz_ukm1cE?t=3083) of the competition at JAXA's youtube channel.
+
 # Installation and Running the simulation
+
+<img align="right" width="328" alt="image" src="https://user-images.githubusercontent.com/40484370/155475000-051598ed-612f-446c-b37f-34c233100cc4.png">
 
 The difference between this version and the [preliminary round](https://github.com/villainjoe/sim-gs-apk) version are the updated API for flashlight functionality and the newly designed mission. Moreover, this version is equipped with the additional mission to run in a real-world environment by considering the most straightforward approach and real-world camera parameters.
 
